@@ -13,12 +13,18 @@ Usage:
 import argparse
 import json
 import sys
+import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote
 
+import dream
+
 WEB = Path(__file__).resolve().parent / "web"
 ROOT = None
+
+RUNNING = {}          # project -> list of log lines while a build runs
 
 EDITABLE = {"description", "instructions", "links", "ai", "memory", "never_send", "folders"}
 
@@ -40,6 +46,75 @@ def list_projects():
         if (p / "settings.json").is_file():
             out.append(p.name)
     return out
+
+
+def start_build(name):
+    if name in RUNNING:
+        return False
+    RUNNING[name] = []
+
+    def work():
+        try:
+            dream.build(ROOT, name, log=RUNNING[name].append)
+        except Exception as e:  # report, never crash the app
+            RUNNING[name].append(f"Build failed: {e}")
+        finally:
+            time.sleep(2)
+            RUNNING.pop(name, None)
+    threading.Thread(target=work, daemon=True).start()
+    return True
+
+
+def pending_runs(pdir):
+    out = []
+    pend = pdir / "pending"
+    if pend.is_dir():
+        for r in sorted(pend.iterdir(), reverse=True):
+            c = r / "changes.json"
+            if c.is_file():
+                data = json.loads(c.read_text(encoding="utf-8"))
+                data.pop("doc_keys", None)
+                out.append(data)
+    return out
+
+
+def wiki_pages(pdir):
+    pages = []
+    for cat in dream.CATEGORIES:
+        d = pdir / "wiki" / cat
+        if not d.is_dir():
+            continue
+        for p in sorted(d.glob("*.md")):
+            text = p.read_text(encoding="utf-8")
+            meta = {}
+            if text.startswith("---"):
+                for line in text.split("---", 2)[1].splitlines():
+                    if ":" in line:
+                        k, v = line.split(":", 1)
+                        meta[k.strip()] = v.split("#")[0].strip()
+            pages.append({"category": cat, "file": p.name, "title": meta.get("title", p.stem),
+                          "summary": meta.get("summary", ""), "updated": meta.get("updated", ""), "text": text})
+    return pages
+
+
+def scheduler():
+    """Hourly/daily auto-update. Results only ever go to Pending."""
+    last = {}
+    while True:
+        time.sleep(60)
+        for name in list_projects():
+            try:
+                sched = json.loads((ROOT / "Projects" / name / "settings.json").read_text(
+                    encoding="utf-8")).get("memory", {}).get("update_schedule", "off")
+            except Exception:
+                continue
+            gap = {"hourly": 3600, "daily": 86400}.get(sched)
+            if not gap:
+                last.pop(name, None)
+                continue
+            last.setdefault(name, time.time())   # first run one full interval after switching on
+            if time.time() - last[name] >= gap and start_build(name):
+                last[name] = time.time()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -65,6 +140,16 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
         elif path == "/api/projects":
             self.send_json({"root": str(ROOT), "projects": list_projects()})
+        elif path.startswith("/api/project/") and path.count("/") == 4:
+            name, what = path[len("/api/project/"):].split("/")
+            pdir = project_dir(name)
+            if not pdir:
+                return self.send_json({"error": "project not found"}, 404)
+            if what == "pages":
+                return self.send_json({"pages": wiki_pages(pdir)})
+            if what == "pending":
+                return self.send_json({"runs": pending_runs(pdir), "running": RUNNING.get(name)})
+            self.send_json({"error": "not found"}, 404)
         elif path.startswith("/api/project/"):
             pdir = project_dir(path[len("/api/project/"):])
             if not pdir:
@@ -76,6 +161,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = unquote(self.path.split("?")[0])
+        parts = path[len("/api/project/"):].split("/") if path.startswith("/api/project/") else []
+        if len(parts) >= 2 and parts[1] in ("build", "approve", "reject"):
+            pdir = project_dir(parts[0])
+            if not pdir:
+                return self.send_json({"error": "project not found"}, 404)
+            if parts[1] == "build":
+                return self.send_json({"started": start_build(pdir.name)})
+            if len(parts) != 3 or not (pdir / "pending" / parts[2] / "changes.json").is_file():
+                return self.send_json({"error": "run not found"}, 404)
+            try:
+                fn = dream.approve if parts[1] == "approve" else dream.reject
+                return self.send_json({"ok": True, "run": fn(ROOT, pdir.name, parts[2], log=lambda *_: None)})
+            except ValueError as e:
+                return self.send_json({"error": str(e)}, 400)
         if not (path.startswith("/api/project/") and path.endswith("/settings")):
             return self.send_json({"error": "not found"}, 404)
         pdir = project_dir(path[len("/api/project/"):-len("/settings")])
@@ -107,6 +206,7 @@ def main():
     if not (ROOT / "Projects").is_dir():
         print(f"No Projects folder in {ROOT}. Run setup_layout.py first.")
         return 1
+    threading.Thread(target=scheduler, daemon=True).start()
     print(f"=== KastoBrain running ===\nRoot: {ROOT}\nOpen: http://127.0.0.1:{args.port}\nStop: Ctrl+C")
     ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
     return 0

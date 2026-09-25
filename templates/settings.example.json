@@ -14,7 +14,7 @@
   ],
   "ai": "claude",
   "memory": {
-    "auto_update_brain": false,
+    "update_schedule": "off",
     "auto_update_summary": false,
     "use_connectors": false,
     "summary_instructions": ""

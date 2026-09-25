@@ -32,6 +32,15 @@
   button:disabled { opacity:.5; cursor:default; }
   .section { margin-bottom:26px; }
   .placeholder { color:var(--dim); border:1px dashed var(--line); border-radius:8px; padding:24px; }
+  .cards { display:flex; flex-wrap:wrap; gap:10px; margin:8px 0 22px; }
+  .card { width:150px; min-height:150px; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px; cursor:pointer; overflow:hidden; }
+  .card b { display:block; font-size:13px; } .card small { color:var(--dim); font-size:11px; }
+  .card p { color:var(--dim); font-size:11px; margin:6px 0 0; }
+  .grp { font-size:13px; color:var(--dim); margin-top:6px; }
+  .run { border:1px solid var(--line); border-radius:8px; padding:12px; margin-bottom:10px; }
+  .run ul { margin:6px 0; padding-left:18px; color:var(--dim); font-size:12px; }
+  pre.page { white-space:pre-wrap; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px; font:12px/1.5 ui-monospace, Consolas, monospace; }
+  .build { margin-left:auto; background:var(--accent); color:#1a1a1a; border:none; font-weight:600; }
   .status { color:var(--dim); font-size:12px; margin-left:10px; }
   @media (max-width:760px) { body { flex-direction:column; } aside { width:auto; } .body { flex-direction:column; } .sub { width:auto; } main { padding:16px; } }
 </style>
@@ -80,14 +89,15 @@ function render() {
   const tabs = TABS.map(t => `<div class="tab ${t === state.tab ? "on" : ""}" data-t="${t}">${t}</div>`).join("");
   document.getElementById("main").innerHTML = `
     <div class="crumb">Projects</div>
-    <div class="title"><div class="dot">${esc(state.project[0] || "?")}</div>${esc(state.project)}</div>
+    <div class="title"><div class="dot">${esc(state.project[0] || "?")}</div>${esc(state.project)}<button class="build" id="buildBtn">Build Brain</button></div><div class="status" id="buildSt" style="margin:-8px 0 10px"></div>
     <div class="tabs">${tabs}</div>
     <div id="tabbody"></div>`;
   document.querySelectorAll("[data-t]").forEach(t => t.onclick = () => { state.tab = t.dataset.t; render(); });
+  document.getElementById("buildBtn").onclick = startBuild;
   const body = document.getElementById("tabbody");
   if (state.tab === "Overview") body.innerHTML = `<div class="body"><div class="panel"><h3>Overview</h3><p class="hint">${esc(s.description)}</p><div class="placeholder">Sessions history arrives in step 8.</div></div></div>`;
   if (state.tab === "Files") body.innerHTML = `<div class="body"><div class="panel"><h3>Files</h3><p class="hint">Your PC folders, read in place.</p><div class="placeholder">Folder browsing arrives in step 3.<br>Folders set now: ${s.folders.length ? s.folders.map(esc).join("<br>") : "none"}</div></div></div>`;
-  if (state.tab === "Brain") body.innerHTML = `<div class="body"><div class="sub"><div class="nav on">All</div><div class="nav">Concepts</div><div class="nav">Entities</div><div class="nav">Workstreams</div><div class="nav">Pending approval</div></div><div class="panel"><div class="placeholder">Page cards and the globe arrive in step 4. Pending approval in step 5.</div></div></div>`;
+  if (state.tab === "Brain") renderBrain(body);
   if (state.tab === "Settings") renderSettings(body);
 }
 
@@ -113,8 +123,9 @@ function renderSettings(body) {
     const m = s.memory;
     panel = `
     <div class="section"><h3>Brain</h3><p class="hint">Organise this project into a wiki. Every update waits in Pending for your approval.</p>
-      <div class="row"><span>Automatically update Brain (daily)</span><input type="checkbox" id="auto_update_brain" ${m.auto_update_brain ? "checked" : ""}></div>
-      <div class="row"><span>Manual update</span><button disabled>Update now (step 6)</button></div>
+      <div class="row"><span>Automatically update Brain<br><small class="muted">Runs while the app is open. Results go to Pending.</small></span><select id="update_schedule" style="width:120px">
+        ${["off","hourly","daily"].map(o => `<option ${m.update_schedule === o ? "selected" : ""}>${o}</option>`).join("")}</select></div>
+      <div class="row"><span>Manual update</span><button id="upd">Update now</button></div>
       <div class="row"><span>Use connectors</span><input type="checkbox" id="use_connectors" ${m.use_connectors ? "checked" : ""}></div></div>
     <div class="section"><h3>Project summary</h3>
       <div class="row"><span>Automatically update summary</span><input type="checkbox" id="auto_update_summary" ${m.auto_update_summary ? "checked" : ""}></div>
@@ -127,6 +138,7 @@ function renderSettings(body) {
   if (state.sub === "Skills") panel = `<h3>Skills</h3><p class="hint">Reusable skills this brain can apply.</p><div class="placeholder">Arrives in step 11.</div>`;
   body.innerHTML = `<div class="body"><div class="sub">${subs}</div><div class="panel">${panel}</div></div>`;
   body.querySelectorAll("[data-s]").forEach(x => x.onclick = () => { state.sub = x.dataset.s; render(); });
+  const upd = document.getElementById("upd"); if (upd) upd.onclick = startBuild;
   const save = document.getElementById("save");
   if (save) save.onclick = saveSettings;
 }
@@ -140,7 +152,7 @@ async function saveSettings() {
     folders: lines("folders"), never_send: lines("never_send"), links: lines("links"),
     ai: document.getElementById("ai").value };
   else changes = { memory: {
-    auto_update_brain: document.getElementById("auto_update_brain").checked,
+    update_schedule: document.getElementById("update_schedule").value,
     use_connectors: document.getElementById("use_connectors").checked,
     auto_update_summary: document.getElementById("auto_update_summary").checked,
     summary_instructions: document.getElementById("summary_instructions").value } };
@@ -148,6 +160,66 @@ async function saveSettings() {
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(changes) }).then(r => r.json());
   if (r.saved) { state.settings = r.settings; document.getElementById("st").textContent = "Saved (previous kept)"; }
   else document.getElementById("st").textContent = "Not saved: " + (r.error || "error");
+}
+
+state.brainView = "All";
+
+async function renderBrain(body) {
+  const [pg, pd] = await Promise.all([
+    fetch(`/api/project/${encodeURIComponent(state.project)}/pages`).then(r => r.json()),
+    fetch(`/api/project/${encodeURIComponent(state.project)}/pending`).then(r => r.json())]);
+  const waiting = pd.runs.filter(r => r.status === "pending");
+  const views = ["All", "Concepts", "Entities", "Workstreams", `Pending approval (${waiting.length})`];
+  const side = views.map(v => {
+    const key = v.startsWith("Pending") ? "Pending" : v;
+    const kids = ["Concepts","Entities","Workstreams"].includes(v)
+      ? pg.pages.filter(p => p.category === v).map(p => `<div class="nav" style="padding-left:22px;font-size:13px" data-page="${esc(p.category + "/" + p.file)}">${esc(p.title)}</div>`).join("") : "";
+    return `<div class="nav ${state.brainView === key ? "on" : ""}" data-v="${key}">${esc(v)}</div>${kids}`;
+  }).join("");
+  let panel;
+  if (state.brainView === "Pending") {
+    panel = `<h3>Pending approval</h3><p class="hint">Nothing reaches the wiki until you approve it.</p>` +
+      (pd.runs.length ? pd.runs.map(r => `<div class="run"><b>Run ${esc(r.run)}</b> <span class="muted">· ${esc(r.status)} · ${esc(r.ai)} · ${r.new_or_changed} new/changed of ${r.documents} documents</span>
+        <ul><li>Added: ${r.added.map(esc).join(", ") || "none"}</li><li>Changed: ${r.changed.map(esc).join(", ") || "none"}</li><li>Removed: ${r.removed.map(esc).join(", ") || "none"}</li></ul>
+        ${r.status === "pending" ? `<button data-a="approve" data-r="${esc(r.run)}">Approve</button> <button data-a="reject" data-r="${esc(r.run)}">Reject</button>` : ""}</div>`).join("")
+      : `<div class="placeholder">No runs yet. Press Build Brain.</div>`);
+  } else if (state.brainView.startsWith("page:")) {
+    const p = pg.pages.find(p => p.category + "/" + p.file === state.brainView.slice(5));
+    panel = p ? `<h3>${esc(p.title)}</h3><p class="hint">${esc(p.category)} · updated ${esc(p.updated)}</p><pre class="page">${esc(p.text)}</pre>` : "Page not found";
+  } else {
+    const cats = state.brainView === "All" ? ["Concepts","Entities","Workstreams"] : [state.brainView];
+    const total = pg.pages.filter(p => cats.includes(p.category)).length;
+    panel = `<h3>${esc(state.brainView)}</h3><p class="hint">${total} pages</p>` + (total ? cats.map(c => {
+      const ps = pg.pages.filter(p => p.category === c);
+      return ps.length ? `<div class="grp">${c}</div><div class="cards">${ps.map(p =>
+        `<div class="card" data-page="${esc(p.category + "/" + p.file)}"><b>${esc(p.title)}</b><small>${esc(p.updated)}</small><p>${esc(p.summary)}</p></div>`).join("")}</div>` : "";
+    }).join("") : `<div class="placeholder">The wiki is empty. Press Build Brain: it reads this brain's documents and builds the pages itself.</div>`);
+  }
+  body.innerHTML = `<div class="body"><div class="sub">${side}</div><div class="panel">${panel}</div></div>`;
+  body.querySelectorAll("[data-v]").forEach(x => x.onclick = () => { state.brainView = x.dataset.v; render(); });
+  body.querySelectorAll("[data-page]").forEach(x => x.onclick = () => { state.brainView = "page:" + x.dataset.page; render(); });
+  body.querySelectorAll("[data-a]").forEach(x => x.onclick = async () => {
+    const r = await fetch(`/api/project/${encodeURIComponent(state.project)}/${x.dataset.a}/${x.dataset.r}`, { method: "POST" }).then(r => r.json());
+    if (!r.ok) alert(r.error || "failed");
+    render();
+  });
+}
+
+async function startBuild() {
+  await fetch(`/api/project/${encodeURIComponent(state.project)}/build`, { method: "POST" });
+  pollBuild();
+}
+
+async function pollBuild() {
+  const st = document.getElementById("buildSt");
+  const pd = await fetch(`/api/project/${encodeURIComponent(state.project)}/pending`).then(r => r.json());
+  if (pd.running) {
+    if (st) st.textContent = "Building… " + (pd.running[pd.running.length - 1] || "");
+    setTimeout(pollBuild, 2000);
+  } else {
+    if (st) st.textContent = "Build finished. See Brain → Pending approval.";
+    if (state.tab === "Brain") render();
+  }
 }
 
 loadProjects();
