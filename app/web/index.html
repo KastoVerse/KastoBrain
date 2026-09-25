@@ -5,49 +5,82 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KastoBrain</title>
 <style>
-  :root { --bg:#191919; --side:#141414; --line:#2a2a2a; --text:#e6e6e6; --dim:#8a8a8a; --accent:#d9777a; --card:#1f1f1f; }
+  :root {
+    --bg:#0E0E0F; --side:#0B0B0C; --panel:#17171A; --line:#2A2A30; --text:#E4E6E9; --dim:#8A8F94;
+    --gold:#C5A15A; --gold-dk:#8A6A2F; --gold-hi:#F1DDA0;
+    --silver:#C0C4C8; --silver-dk:#7D8288; --silver-hi:#F4F6F8;
+    --purple:#5B2A86; --twilight:#2A1240; --violet:#8E5CC2; --plum:#4A1B2E;
+    --metal-gold:linear-gradient(135deg,#8A6A2F 0%,#C5A15A 30%,#F1DDA0 50%,#C5A15A 70%,#8A6A2F 100%);
+    --metal-silver:linear-gradient(135deg,#7D8288 0%,#C0C4C8 30%,#F4F6F8 50%,#C0C4C8 70%,#7D8288 100%);
+  }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, "Segoe UI", sans-serif; display:flex; min-height:100vh; }
-  aside { min-height:100vh; width:230px; background:var(--side); border-right:1px solid var(--line); padding:16px 10px; flex-shrink:0; }
-  aside h4 { color:var(--dim); font-size:12px; font-weight:500; margin:18px 8px 6px; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, "Segoe UI", sans-serif; display:flex; min-height:100vh; position:relative; }
+  body::before { content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
+    background:radial-gradient(60% 50% at 85% 0%, rgba(91,42,134,.35), transparent 70%),
+               radial-gradient(50% 45% at 10% 100%, rgba(42,18,64,.55), transparent 70%);
+    animation:glow 18s ease-in-out infinite alternate; }
+  @keyframes glow { from { opacity:.65; } to { opacity:1; } }
+  .gold-text { background:var(--metal-gold); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  aside { min-height:100vh; width:230px; background:rgba(11,11,12,.85); border-right:1px solid transparent; border-image:var(--metal-silver) 1; border-image-slice:0 1 0 0; padding:16px 10px; flex-shrink:0; }
+  aside h4 { color:var(--dim); font-size:12px; font-weight:500; margin:18px 8px 6px; letter-spacing:.04em; text-transform:uppercase; }
+  .logo { font-weight:700; font-size:17px; letter-spacing:.02em; padding:6px 8px; }
   .nav { display:block; padding:6px 8px; border-radius:6px; color:var(--text); cursor:pointer; text-decoration:none; }
-  .nav:hover, .nav.on { background:#232323; }
+  .nav:hover { background:rgba(142,92,194,.12); }
+  .nav.on { background:rgba(91,42,134,.28); box-shadow:inset 2px 0 0 var(--gold); }
   .muted { color:var(--dim); }
   main { flex:1; padding:22px 32px; min-width:0; }
   .crumb { color:var(--dim); font-size:13px; }
-  .title { display:flex; align-items:center; gap:12px; margin:18px 0; font-size:18px; }
-  .dot { width:36px; height:36px; border-radius:50%; background:#3a2324; display:grid; place-items:center; color:var(--accent); font-weight:700; }
-  .tabs { display:flex; gap:20px; border-bottom:1px solid var(--line); }
+  .title { display:flex; align-items:center; gap:12px; margin:18px 0; font-size:19px; }
+  .dot { width:38px; height:38px; border-radius:50%; background:var(--metal-gold); display:grid; place-items:center; color:#1a1408; font-weight:800; box-shadow:0 0 18px rgba(197,161,90,.25); }
+  .tabs { display:flex; gap:22px; border-bottom:1px solid var(--line); }
   .tab { padding:8px 0; cursor:pointer; color:var(--dim); border-bottom:2px solid transparent; }
-  .tab.on { color:var(--text); border-color:var(--text); }
+  .tab:hover { color:var(--silver); }
+  .tab.on { color:var(--gold); border-image:var(--metal-gold) 1; border-image-slice:0 0 1 0; border-bottom-width:2px; border-bottom-style:solid; }
   .body { display:flex; gap:28px; padding-top:18px; }
-  .sub { width:200px; flex-shrink:0; }
-  .panel { flex:1; max-width:720px; }
-  .panel h3 { margin:0 0 4px; font-size:15px; }
+  .sub { width:210px; flex-shrink:0; }
+  .panel { flex:1; max-width:760px; }
+  .panel h3 { margin:0 0 4px; font-size:15px; color:var(--gold); }
   .panel p.hint { color:var(--dim); font-size:12px; margin:0 0 10px; }
-  textarea, input[type=text], select { width:100%; background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:8px; font:inherit; }
+  textarea, input[type=text], select { width:100%; background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:8px; font:inherit; }
+  textarea:focus, input:focus, select:focus { outline:none; border-color:var(--violet); box-shadow:0 0 0 2px rgba(142,92,194,.25); }
+  input[type=checkbox] { accent-color:var(--gold); width:16px; height:16px; }
   textarea { min-height:90px; }
   .row { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--line); gap:16px; }
-  button { background:#2a2a2a; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px 12px; cursor:pointer; font:inherit; }
+  button { background:var(--panel); color:var(--silver-hi); border:1px solid var(--silver-dk); border-radius:6px; padding:6px 12px; cursor:pointer; font:inherit; }
+  button:hover { border-color:var(--silver); background:#1d1d22; }
   button:disabled { opacity:.5; cursor:default; }
   .section { margin-bottom:26px; }
-  .placeholder { color:var(--dim); border:1px dashed var(--line); border-radius:8px; padding:24px; }
+  .placeholder { color:var(--dim); border:1px dashed var(--line); border-radius:8px; padding:24px; background:rgba(23,23,26,.6); }
   .cards { display:flex; flex-wrap:wrap; gap:10px; margin:8px 0 22px; }
-  .card { width:150px; min-height:150px; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px; cursor:pointer; overflow:hidden; }
+  .card { width:156px; min-height:150px; background:linear-gradient(180deg,#1b1b1f,#141417); border:1px solid var(--line); border-radius:9px; padding:10px; cursor:pointer; overflow:hidden; transition:border-color .2s, box-shadow .2s; }
+  .card:hover { border-color:var(--gold); box-shadow:0 0 16px rgba(197,161,90,.18); }
   .card b { display:block; font-size:13px; } .card small { color:var(--dim); font-size:11px; }
   .card p { color:var(--dim); font-size:11px; margin:6px 0 0; }
-  .grp { font-size:13px; color:var(--dim); margin-top:6px; }
-  .run { border:1px solid var(--line); border-radius:8px; padding:12px; margin-bottom:10px; }
+  .card.Concepts { border-top:2px solid var(--gold); } .card.Entities { border-top:2px solid var(--silver); } .card.Workstreams { border-top:2px solid var(--violet); }
+  .grp { font-size:12px; color:var(--silver); margin-top:6px; letter-spacing:.04em; text-transform:uppercase; }
+  .run { border:1px solid var(--line); border-radius:9px; padding:12px; margin-bottom:10px; background:rgba(23,23,26,.7); }
   .run ul { margin:6px 0; padding-left:18px; color:var(--dim); font-size:12px; }
-  pre.page { white-space:pre-wrap; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px; font:12px/1.5 ui-monospace, Consolas, monospace; }
-  .build { margin-left:auto; background:var(--accent); color:#1a1a1a; border:none; font-weight:600; }
+  .badge { font-size:11px; padding:2px 8px; border-radius:10px; margin-left:6px; }
+  .badge.pending { color:#111; background:var(--metal-silver); }
+  .badge.approved { color:#1a1408; background:var(--metal-gold); }
+  .badge.rejected, .badge.failed { color:#e9d6de; background:var(--plum); }
+  .badge.nochanges { color:var(--dim); border:1px solid var(--line); }
+  pre.page { white-space:pre-wrap; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; font:12px/1.5 ui-monospace, Consolas, monospace; }
+  .build { margin-left:auto; background:var(--metal-gold); background-size:200% 200%; color:#1a1408; border:none; font-weight:700; padding:8px 16px; box-shadow:0 0 18px rgba(197,161,90,.25); transition:background-position .6s; }
+  .build:hover { background-position:100% 100%; background-color:transparent; }
   .status { color:var(--dim); font-size:12px; margin-left:10px; }
-  @media (max-width:760px) { body { flex-direction:column; } aside { width:auto; } .body { flex-direction:column; } .sub { width:auto; } main { padding:16px; } }
+  .status.building { color:var(--violet); animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity:.45; } }
+  .globe-wrap { margin-top:18px; border-radius:12px; background:radial-gradient(circle at 50% 50%, rgba(91,42,134,.35), rgba(42,18,64,.15) 55%, transparent 75%); }
+  .globe-wrap canvas { display:block; width:100%; cursor:grab; }
+  .legend { display:flex; flex-wrap:wrap; gap:10px; font-size:11px; color:var(--dim); padding:4px 6px 8px; }
+  .legend i { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; vertical-align:middle; }
+  @media (max-width:760px) { body { flex-direction:column; } aside { width:auto; min-height:0; } .body { flex-direction:column; } .sub { width:auto; } main { padding:16px; } }
 </style>
 </head>
 <body>
 <aside>
-  <div class="nav" style="font-weight:600">KastoBrain</div>
+  <div class="logo gold-text">KastoBrain</div>
   <h4>PC Brain</h4>
   <div class="nav muted">PC Brain (coming in step 10)</div>
   <h4>Projects</h4>
@@ -179,7 +212,7 @@ async function renderBrain(body) {
   let panel;
   if (state.brainView === "Pending") {
     panel = `<h3>Pending approval</h3><p class="hint">Nothing reaches the wiki until you approve it.</p>` +
-      (pd.runs.length ? pd.runs.map(r => `<div class="run"><b>Run ${esc(r.run)}</b> <span class="muted">· ${esc(r.status)} · ${esc(r.ai)} · ${r.new_or_changed} new/changed of ${r.documents} documents</span>
+      (pd.runs.length ? pd.runs.map(r => `<div class="run"><b>Run ${esc(r.run)}</b> <span class="badge ${esc(r.status.replace(" ",""))}">${esc(r.status)}</span> <span class="muted">· ${esc(r.ai)} · ${r.new_or_changed} new/changed of ${r.documents} documents</span>
         <ul><li>Added: ${r.added.map(esc).join(", ") || "none"}</li><li>Changed: ${r.changed.map(esc).join(", ") || "none"}</li><li>Removed: ${r.removed.map(esc).join(", ") || "none"}</li></ul>
         ${r.status === "pending" ? `<button data-a="approve" data-r="${esc(r.run)}">Approve</button> <button data-a="reject" data-r="${esc(r.run)}">Reject</button>` : ""}</div>`).join("")
       : `<div class="placeholder">No runs yet. Press Build Brain.</div>`);
@@ -192,10 +225,12 @@ async function renderBrain(body) {
     panel = `<h3>${esc(state.brainView)}</h3><p class="hint">${total} pages</p>` + (total ? cats.map(c => {
       const ps = pg.pages.filter(p => p.category === c);
       return ps.length ? `<div class="grp">${c}</div><div class="cards">${ps.map(p =>
-        `<div class="card" data-page="${esc(p.category + "/" + p.file)}"><b>${esc(p.title)}</b><small>${esc(p.updated)}</small><p>${esc(p.summary)}</p></div>`).join("")}</div>` : "";
+        `<div class="card ${p.category}" data-page="${esc(p.category + "/" + p.file)}"><b>${esc(p.title)}</b><small>${esc(p.updated)}</small><p>${esc(p.summary)}</p></div>`).join("")}</div>` : "";
     }).join("") : `<div class="placeholder">The wiki is empty. Press Build Brain: it reads this brain's documents and builds the pages itself.</div>`);
   }
-  body.innerHTML = `<div class="body"><div class="sub">${side}</div><div class="panel">${panel}</div></div>`;
+  body.innerHTML = `<div class="body"><div class="sub">${side}<div class="globe-wrap"><canvas id="globe" width="420" height="420"></canvas>
+    <div class="legend"><span><i style="background:#C5A15A"></i>Concepts</span><span><i style="background:#C0C4C8"></i>Entities</span><span><i style="background:#8E5CC2"></i>Workstreams</span></div></div></div><div class="panel">${panel}</div></div>`;
+  drawGlobe(document.getElementById("globe"), pg.pages);
   body.querySelectorAll("[data-v]").forEach(x => x.onclick = () => { state.brainView = x.dataset.v; render(); });
   body.querySelectorAll("[data-page]").forEach(x => x.onclick = () => { state.brainView = "page:" + x.dataset.page; render(); });
   body.querySelectorAll("[data-a]").forEach(x => x.onclick = async () => {
@@ -214,12 +249,84 @@ async function pollBuild() {
   const st = document.getElementById("buildSt");
   const pd = await fetch(`/api/project/${encodeURIComponent(state.project)}/pending`).then(r => r.json());
   if (pd.running) {
-    if (st) st.textContent = "Building… " + (pd.running[pd.running.length - 1] || "");
+    if (st) { st.className = "status building"; st.textContent = "Building… " + (pd.running[pd.running.length - 1] || ""); }
     setTimeout(pollBuild, 2000);
   } else {
-    if (st) st.textContent = "Build finished. See Brain → Pending approval.";
+    if (st) { st.className = "status"; st.textContent = "Build finished. See Brain → Pending approval."; }
     if (state.tab === "Brain") render();
   }
+}
+
+// Globe: one metal bead per page, lines where pages link with [[...]]. Drag to turn, click to open.
+const METAL = { Concepts: ["#F1DDA0", "#C5A15A", "#6E5222"], Entities: ["#F4F6F8", "#C0C4C8", "#5E6268"], Workstreams: ["#D7C2EE", "#8E5CC2", "#3C1D5C"] };
+let globeTimer = null;
+function drawGlobe(cv, pages) {
+  if (globeTimer) cancelAnimationFrame(globeTimer);
+  const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, R = W * 0.40;
+  const n = Math.max(pages.length, 1), golden = Math.PI * (3 - Math.sqrt(5));
+  const nodes = pages.map((p, i) => {
+    const y = 1 - (i + 0.5) / n * 2, r = Math.sqrt(1 - y * y), t = golden * i;
+    return { p, x: Math.cos(t) * r, y, z: Math.sin(t) * r };
+  });
+  const byTitle = Object.fromEntries(nodes.map(nd => [nd.p.title.toLowerCase(), nd]));
+  const edges = [];
+  nodes.forEach(a => (a.p.text.match(/\[\[([^\]]+)\]\]/g) || []).forEach(m => {
+    const b = byTitle[m.slice(2, -2).toLowerCase()];
+    if (b && b !== a && !edges.some(e => (e[0] === b && e[1] === a))) edges.push([a, b]);
+  }));
+  let rotY = 0, rotX = -0.35, drag = null, moved = false, shown = [];
+  const project = nd => {
+    const cy = Math.cos(rotY), sy = Math.sin(rotY), cx = Math.cos(rotX), sx = Math.sin(rotX);
+    const x1 = nd.x * cy + nd.z * sy, z1 = -nd.x * sy + nd.z * cy;
+    const y2 = nd.y * cx - z1 * sx, z2 = nd.y * sx + z1 * cx;
+    const s = 1 / (1.9 - z2 * 0.5);
+    return { X: W / 2 + x1 * R * s * 1.35, Y: H / 2 + y2 * R * s * 1.35, Z: z2, s };
+  };
+  function frame() {
+    if (!document.body.contains(cv)) return;
+    if (!drag) rotY += 0.0035;
+    ctx.clearRect(0, 0, W, H);
+    ctx.strokeStyle = "rgba(192,196,200,0.10)"; ctx.lineWidth = 1;
+    for (let k = -2; k <= 2; k++) {                       // silver latitude rings
+      ctx.beginPath(); const yy = k / 3;
+      ctx.ellipse(W / 2, H / 2 + yy * R * 0.95 * Math.cos(rotX), R * Math.sqrt(1 - yy * yy) * 1.02, R * Math.sqrt(1 - yy * yy) * 0.28, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(W / 2, H / 2, R * 1.02, 0, Math.PI * 2); ctx.strokeStyle = "rgba(192,196,200,0.18)"; ctx.stroke();
+    const P = new Map(nodes.map(nd => [nd, project(nd)]));
+    edges.forEach(([a, b]) => {
+      const A = P.get(a), B = P.get(b), depth = (A.Z + B.Z + 2) / 4;
+      const g = ctx.createLinearGradient(A.X, A.Y, B.X, B.Y);
+      g.addColorStop(0, `rgba(197,161,90,${0.15 + depth * 0.45})`); g.addColorStop(1, `rgba(192,196,200,${0.15 + depth * 0.45})`);
+      ctx.strokeStyle = g; ctx.lineWidth = 1 + depth; ctx.beginPath(); ctx.moveTo(A.X, A.Y); ctx.lineTo(B.X, B.Y); ctx.stroke();
+    });
+    shown = [...P.entries()].sort((a, b) => a[1].Z - b[1].Z);
+    shown.forEach(([nd, q]) => {
+      const c = METAL[nd.p.category] || METAL.Entities, rad = 13 * q.s * 2;
+      const g = ctx.createRadialGradient(q.X - rad * 0.35, q.Y - rad * 0.4, rad * 0.1, q.X, q.Y, rad);
+      g.addColorStop(0, c[0]); g.addColorStop(0.5, c[1]); g.addColorStop(1, c[2]);
+      ctx.globalAlpha = 0.45 + (q.Z + 1) * 0.275;
+      ctx.shadowColor = c[1]; ctx.shadowBlur = 16;
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(q.X, q.Y, rad, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1; q.r = rad;
+    });
+    if (!nodes.length) { ctx.fillStyle = "#8A8F94"; ctx.font = "13px system-ui"; ctx.textAlign = "center"; ctx.fillText("No pages yet", W / 2, H / 2); }
+    globeTimer = requestAnimationFrame(frame);
+  }
+  const pos = e => { const b = cv.getBoundingClientRect(); return [(e.clientX - b.left) * W / b.width, (e.clientY - b.top) * H / b.height]; };
+  cv.onpointerdown = e => { drag = pos(e); moved = false; cv.setPointerCapture(e.pointerId); };
+  cv.onpointermove = e => {
+    const [x, y] = pos(e);
+    if (drag) { rotY += (x - drag[0]) * 0.01; rotX = Math.max(-1.2, Math.min(1.2, rotX + (y - drag[1]) * 0.01)); if (Math.abs(x - drag[0]) + Math.abs(y - drag[1]) > 2) moved = true; drag = [x, y]; return; }
+    const hit = [...shown].reverse().find(([, q]) => Math.hypot(q.X - x, q.Y - y) < q.r + 3);
+    cv.title = hit ? hit[0].p.title : ""; cv.style.cursor = hit ? "pointer" : "grab";
+  };
+  cv.onpointerup = e => {
+    const [x, y] = pos(e); drag = null;
+    if (moved) return;
+    const hit = [...shown].reverse().find(([, q]) => Math.hypot(q.X - x, q.Y - y) < q.r + 3);
+    if (hit) { state.brainView = "page:" + hit[0].p.category + "/" + hit[0].p.file; render(); }
+  };
+  frame();
 }
 
 loadProjects();
