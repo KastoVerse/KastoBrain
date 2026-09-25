@@ -17,7 +17,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import parse_qs, unquote, urlsplit
 
 import dream
 
@@ -63,6 +63,38 @@ def start_build(name):
             RUNNING.pop(name, None)
     threading.Thread(target=work, daemon=True).start()
     return True
+
+
+def list_folder(pdir, folder):
+    """Read-only listing of one folder inside this brain's folders. Never changes anything."""
+    settings = json.loads((pdir / "settings.json").read_text(encoding="utf-8"))
+    roots = [Path(f) for f in settings.get("folders", [])]
+    if not folder:
+        return {"path": "", "roots": True, "entries": [
+            {"name": str(r), "path": str(r), "dir": True, "exists": r.is_dir(),
+             "never_send": dream.under(r, settings.get("never_send", []))} for r in roots]}
+    target = Path(folder).resolve()
+    if not any(target == r.resolve() or r.resolve() in target.parents for r in roots):
+        return {"error": "outside this brain's folders"}
+    if not target.is_dir():
+        return {"error": "folder not found"}
+    seen_file = pdir / "processed.json"
+    seen = set(json.loads(seen_file.read_text(encoding="utf-8"))) if seen_file.exists() else set()
+    entries = []
+    for e in sorted(target.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+        try:
+            st = e.stat()
+        except OSError:
+            continue
+        item = {"name": e.name, "path": str(e), "dir": e.is_dir(),
+                "never_send": dream.under(e, settings.get("never_send", []))}
+        if not e.is_dir():
+            item.update(size=st.st_size, mtime=int(st.st_mtime),
+                        readable=e.suffix.lower() in dream.DOC_TYPES,
+                        in_brain=dream.doc_key({"path": str(e), "size": st.st_size, "mtime": int(st.st_mtime)}) in seen)
+        entries.append(item)
+    parent = str(target.parent) if target not in [r.resolve() for r in roots] else ""
+    return {"path": str(target), "parent": parent, "entries": entries}
 
 
 def pending_runs(pdir):
@@ -130,7 +162,9 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        path = unquote(self.path.split("?")[0])
+        parts = urlsplit(self.path)
+        query = parse_qs(parts.query)
+        path = unquote(parts.path)
         if path == "/" or path == "/index.html":
             body = (WEB / "index.html").read_bytes()
             self.send_response(200)
@@ -147,6 +181,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "project not found"}, 404)
             if what == "pages":
                 return self.send_json({"pages": wiki_pages(pdir)})
+            if what == "files":
+                return self.send_json(list_folder(pdir, query.get("path", [""])[0]))
             if what == "pending":
                 return self.send_json({"runs": pending_runs(pdir), "running": RUNNING.get(name)})
             self.send_json({"error": "not found"}, 404)

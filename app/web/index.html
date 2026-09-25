@@ -71,6 +71,19 @@
   .status { color:var(--dim); font-size:12px; margin-left:10px; }
   .status.building { color:var(--violet); animation:pulse 1.4s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity:.45; } }
+  .files { width:100%; border-collapse:collapse; font-size:13px; }
+  .files td { padding:7px 8px; border-bottom:1px solid var(--line); }
+  .files tr.dir td:first-child { cursor:pointer; }
+  .files tr:hover td { background:rgba(94,43,138,.12); }
+  .files .sz { color:var(--dim); text-align:right; white-space:nowrap; width:90px; }
+  .files .dt { color:var(--dim); white-space:nowrap; width:110px; }
+  .ico { display:inline-block; width:18px; color:var(--gold); }
+  .tag { font-size:10px; padding:1px 7px; border-radius:9px; margin-left:6px; white-space:nowrap; }
+  .tag.inbrain { color:#1a1408; background:var(--metal-gold); }
+  .tag.never { color:#e9d6de; background:var(--plum); }
+  .tag.skip { color:var(--dim); border:1px solid var(--line); }
+  .crumbs { font-size:12px; color:var(--dim); margin-bottom:10px; word-break:break-all; }
+  .crumbs a { color:var(--silver); cursor:pointer; }
   .globe-wrap { margin-top:18px; border-radius:12px; background:radial-gradient(circle at 50% 50%, rgba(94,43,138,.40), rgba(94,43,138,.12) 55%, transparent 75%); }
   .globe-wrap canvas { display:block; width:100%; cursor:grab; }
   .legend { display:flex; flex-wrap:wrap; gap:10px; font-size:11px; color:var(--dim); padding:4px 6px 8px; }
@@ -135,7 +148,7 @@ async function loadProjects() {
     return;
   }
   box.innerHTML = r.projects.map(p => `<a class="nav" data-p="${esc(p)}">${esc(p)}</a>`).join("");
-  box.querySelectorAll("[data-p]").forEach(a => a.onclick = () => openProject(a.dataset.p));
+  box.querySelectorAll("[data-p]").forEach(a => a.onclick = () => { state.filesPath = ""; openProject(a.dataset.p); });
   openProject(state.project || r.projects[0]);
 }
 
@@ -158,7 +171,7 @@ function render() {
   document.getElementById("buildBtn").onclick = startBuild;
   const body = document.getElementById("tabbody");
   if (state.tab === "Overview") body.innerHTML = `<div class="body"><div class="panel"><h3>Overview</h3><p class="hint">${esc(s.description)}</p><div class="placeholder">Sessions history arrives in step 8.</div></div></div>`;
-  if (state.tab === "Files") body.innerHTML = `<div class="body"><div class="panel"><h3>Files</h3><p class="hint">Your PC folders, read in place.</p><div class="placeholder">Folder browsing arrives in step 3.<br>Folders set now: ${s.folders.length ? s.folders.map(esc).join("<br>") : "none"}</div></div></div>`;
+  if (state.tab === "Files") renderFiles(body);
   if (state.tab === "Brain") renderBrain(body);
   if (state.tab === "Settings") renderSettings(body);
 }
@@ -222,6 +235,30 @@ async function saveSettings() {
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(changes) }).then(r => r.json());
   if (r.saved) { state.settings = r.settings; document.getElementById("st").textContent = "Saved (previous kept)"; }
   else document.getElementById("st").textContent = "Not saved: " + (r.error || "error");
+}
+
+state.filesPath = "";
+
+async function renderFiles(body) {
+  const d = await fetch(`/api/project/${encodeURIComponent(state.project)}/files?path=${encodeURIComponent(state.filesPath)}`).then(r => r.json());
+  if (d.error) { state.filesPath = ""; body.innerHTML = `<div class="body"><div class="panel"><div class="placeholder">${esc(d.error)}</div></div></div>`; return; }
+  const size = n => n < 1024 ? n + " B" : n < 1048576 ? (n / 1024).toFixed(0) + " KB" : (n / 1048576).toFixed(1) + " MB";
+  const date = t => new Date(t * 1000).toLocaleDateString();
+  const rows = d.entries.map(e => `<tr class="${e.dir ? "dir" : ""}" ${e.dir && e.exists !== false ? `data-go="${esc(e.path)}"` : ""}>
+      <td><span class="ico">${e.dir ? "▸" : "·"}</span>${esc(e.name)}
+        ${e.exists === false ? '<span class="tag skip">not found</span>' : ""}
+        ${e.never_send ? '<span class="tag never">never send</span>' : ""}
+        ${e.in_brain ? '<span class="tag inbrain">in brain</span>' : ""}
+        ${!e.dir && !e.readable ? '<span class="tag skip">not read</span>' : ""}</td>
+      <td class="dt">${e.mtime ? date(e.mtime) : ""}</td><td class="sz">${e.size != null ? size(e.size) : ""}</td></tr>`).join("");
+  const crumbs = d.roots ? "This brain's folders" :
+    `<a data-go="">All folders</a> › ${d.parent ? `<a data-go="${esc(d.parent)}">up</a> › ` : ""}${esc(d.path)}`;
+  body.innerHTML = `<div class="body"><div class="panel" style="max-width:none">
+    <h3>Files</h3><p class="hint">Your PC folders, read in place. Nothing here is moved, copied or changed. Add folders in Settings → Context.</p>
+    <div class="crumbs">${crumbs}</div>
+    ${d.entries.length ? `<table class="files">${rows}</table>` : `<div class="placeholder">${d.roots ? "No folders set yet. Add them in Settings → Context." : "Empty folder."}</div>`}
+  </div></div>`;
+  body.querySelectorAll("[data-go]").forEach(x => x.onclick = () => { state.filesPath = x.dataset.go; render(); });
 }
 
 state.brainView = "All";
