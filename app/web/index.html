@@ -6,32 +6,32 @@
 <title>KastoBrain</title>
 <style>
   :root {
-    --bg:#0E0E0F; --side:#0B0B0C; --panel:#17171A; --line:#2A2A30; --text:#E4E6E9; --dim:#8A8F94;
-    --gold:#C5A15A; --gold-dk:#8A6A2F; --gold-hi:#F1DDA0;
+    --bg:#1E1D24; --side:#16151B; --panel:#26242E; --line:#3A3744; --text:#D8DAE0; --dim:#9A98A6;
+    --gold:#c2a36a; --gold-dk:#7a5a18; --gold-hi:#e8d9b5;
     --silver:#C0C4C8; --silver-dk:#7D8288; --silver-hi:#F4F6F8;
-    --purple:#5B2A86; --twilight:#2A1240; --violet:#8E5CC2; --plum:#4A1B2E;
-    --metal-gold:linear-gradient(135deg,#8A6A2F 0%,#C5A15A 30%,#F1DDA0 50%,#C5A15A 70%,#8A6A2F 100%);
+    --purple:#5e2b8a; --twilight:#3a1d55; --violet:#9b6fc9; --plum:#4A1B2E;
+    --metal-gold:linear-gradient(135deg,#7a5a18 0%,#c2a36a 30%,#e8d9b5 50%,#c2a36a 70%,#7a5a18 100%);
     --metal-silver:linear-gradient(135deg,#7D8288 0%,#C0C4C8 30%,#F4F6F8 50%,#C0C4C8 70%,#7D8288 100%);
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, "Segoe UI", sans-serif; display:flex; min-height:100vh; position:relative; }
   body::before { content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
-    background:radial-gradient(60% 50% at 85% 0%, rgba(91,42,134,.35), transparent 70%),
-               radial-gradient(50% 45% at 10% 100%, rgba(42,18,64,.55), transparent 70%);
+    background:radial-gradient(60% 50% at 85% 0%, rgba(94,43,138,.30), transparent 70%),
+               radial-gradient(50% 45% at 10% 100%, rgba(94,43,138,.18), transparent 70%);
     animation:glow 18s ease-in-out infinite alternate; }
   @keyframes glow { from { opacity:.65; } to { opacity:1; } }
   .gold-text { background:var(--metal-gold); -webkit-background-clip:text; background-clip:text; color:transparent; }
-  aside { min-height:100vh; width:230px; background:rgba(11,11,12,.85); border-right:1px solid transparent; border-image:var(--metal-silver) 1; border-image-slice:0 1 0 0; padding:16px 10px; flex-shrink:0; }
+  aside { min-height:100vh; width:230px; background:var(--side); border-right:1px solid var(--line); padding:16px 10px; flex-shrink:0; }
   aside h4 { color:var(--dim); font-size:12px; font-weight:500; margin:18px 8px 6px; letter-spacing:.04em; text-transform:uppercase; }
   .logo { font-weight:700; font-size:17px; letter-spacing:.02em; padding:6px 8px; }
   .nav { display:block; padding:6px 8px; border-radius:6px; color:var(--text); cursor:pointer; text-decoration:none; }
-  .nav:hover { background:rgba(142,92,194,.12); }
-  .nav.on { background:rgba(91,42,134,.28); box-shadow:inset 2px 0 0 var(--gold); }
+  .nav:hover { background:rgba(94,43,138,.18); }
+  .nav.on { background:rgba(94,43,138,.38); box-shadow:inset 2px 0 0 var(--gold); }
   .muted { color:var(--dim); }
   main { flex:1; padding:22px 32px; min-width:0; }
   .crumb { color:var(--dim); font-size:13px; }
   .title { display:flex; align-items:center; gap:12px; margin:18px 0; font-size:19px; }
-  .dot { width:38px; height:38px; border-radius:50%; background:var(--metal-gold); display:grid; place-items:center; color:#1a1408; font-weight:800; box-shadow:0 0 18px rgba(197,161,90,.25); }
+  .dot { width:38px; height:38px; border-radius:50%; background:var(--metal-gold); display:grid; place-items:center; color:#1a1408; font-weight:800; box-shadow:0 0 18px rgba(194,163,106,.25); }
   .tabs { display:flex; gap:22px; border-bottom:1px solid var(--line); }
   .tab { padding:8px 0; cursor:pointer; color:var(--dim); border-bottom:2px solid transparent; }
   .tab:hover { color:var(--silver); }
@@ -42,23 +42,23 @@
   .panel h3 { margin:0 0 4px; font-size:15px; color:var(--gold); }
   .panel p.hint { color:var(--dim); font-size:12px; margin:0 0 10px; }
   textarea, input[type=text], select { width:100%; background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:8px; font:inherit; }
-  textarea:focus, input:focus, select:focus { outline:none; border-color:var(--violet); box-shadow:0 0 0 2px rgba(142,92,194,.25); }
+  textarea:focus, input:focus, select:focus { outline:none; border-color:var(--violet); box-shadow:0 0 0 2px rgba(155,111,201,.3); }
   input[type=checkbox] { accent-color:var(--gold); width:16px; height:16px; }
   textarea { min-height:90px; }
   .row { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--line); gap:16px; }
   button { background:var(--panel); color:var(--silver-hi); border:1px solid var(--silver-dk); border-radius:6px; padding:6px 12px; cursor:pointer; font:inherit; }
-  button:hover { border-color:var(--silver); background:#1d1d22; }
+  button:hover { border-color:var(--silver); background:#2e2b38; }
   button:disabled { opacity:.5; cursor:default; }
   .section { margin-bottom:26px; }
-  .placeholder { color:var(--dim); border:1px dashed var(--line); border-radius:8px; padding:24px; background:rgba(23,23,26,.6); }
+  .placeholder { color:var(--dim); border:1px dashed var(--line); border-radius:8px; padding:24px; background:rgba(38,36,46,.6); }
   .cards { display:flex; flex-wrap:wrap; gap:10px; margin:8px 0 22px; }
-  .card { width:156px; min-height:150px; background:linear-gradient(180deg,#1b1b1f,#141417); border:1px solid var(--line); border-radius:9px; padding:10px; cursor:pointer; overflow:hidden; transition:border-color .2s, box-shadow .2s; }
-  .card:hover { border-color:var(--gold); box-shadow:0 0 16px rgba(197,161,90,.18); }
+  .card { width:156px; min-height:150px; background:linear-gradient(180deg,#2a2833,#232129); border:1px solid var(--line); border-radius:9px; padding:10px; cursor:pointer; overflow:hidden; transition:border-color .2s, box-shadow .2s; }
+  .card:hover { border-color:var(--gold); box-shadow:0 0 16px rgba(194,163,106,.2); }
   .card b { display:block; font-size:13px; } .card small { color:var(--dim); font-size:11px; }
   .card p { color:var(--dim); font-size:11px; margin:6px 0 0; }
   .card.Concepts { border-top:2px solid var(--gold); } .card.Entities { border-top:2px solid var(--silver); } .card.Workstreams { border-top:2px solid var(--violet); }
   .grp { font-size:12px; color:var(--silver); margin-top:6px; letter-spacing:.04em; text-transform:uppercase; }
-  .run { border:1px solid var(--line); border-radius:9px; padding:12px; margin-bottom:10px; background:rgba(23,23,26,.7); }
+  .run { border:1px solid var(--line); border-radius:9px; padding:12px; margin-bottom:10px; background:rgba(38,36,46,.7); }
   .run ul { margin:6px 0; padding-left:18px; color:var(--dim); font-size:12px; }
   .badge { font-size:11px; padding:2px 8px; border-radius:10px; margin-left:6px; }
   .badge.pending { color:#111; background:var(--metal-silver); }
@@ -66,12 +66,12 @@
   .badge.rejected, .badge.failed { color:#e9d6de; background:var(--plum); }
   .badge.nochanges { color:var(--dim); border:1px solid var(--line); }
   pre.page { white-space:pre-wrap; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; font:12px/1.5 ui-monospace, Consolas, monospace; }
-  .build { margin-left:auto; background:var(--metal-gold); background-size:200% 200%; color:#1a1408; border:none; font-weight:700; padding:8px 16px; box-shadow:0 0 18px rgba(197,161,90,.25); transition:background-position .6s; }
+  .build { margin-left:auto; background:var(--metal-gold); background-size:200% 200%; color:#1a1408; border:none; font-weight:700; padding:8px 16px; box-shadow:0 0 18px rgba(194,163,106,.25); transition:background-position .6s; }
   .build:hover { background-position:100% 100%; background-color:transparent; }
   .status { color:var(--dim); font-size:12px; margin-left:10px; }
   .status.building { color:var(--violet); animation:pulse 1.4s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity:.45; } }
-  .globe-wrap { margin-top:18px; border-radius:12px; background:radial-gradient(circle at 50% 50%, rgba(91,42,134,.35), rgba(42,18,64,.15) 55%, transparent 75%); }
+  .globe-wrap { margin-top:18px; border-radius:12px; background:radial-gradient(circle at 50% 50%, rgba(94,43,138,.40), rgba(94,43,138,.12) 55%, transparent 75%); }
   .globe-wrap canvas { display:block; width:100%; cursor:grab; }
   .legend { display:flex; flex-wrap:wrap; gap:10px; font-size:11px; color:var(--dim); padding:4px 6px 8px; }
   .legend i { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; vertical-align:middle; }
@@ -229,7 +229,7 @@ async function renderBrain(body) {
     }).join("") : `<div class="placeholder">The wiki is empty. Press Build Brain: it reads this brain's documents and builds the pages itself.</div>`);
   }
   body.innerHTML = `<div class="body"><div class="sub">${side}<div class="globe-wrap"><canvas id="globe" width="420" height="420"></canvas>
-    <div class="legend"><span><i style="background:#C5A15A"></i>Concepts</span><span><i style="background:#C0C4C8"></i>Entities</span><span><i style="background:#8E5CC2"></i>Workstreams</span></div></div></div><div class="panel">${panel}</div></div>`;
+    <div class="legend"><span><i style="background:#c2a36a"></i>Concepts</span><span><i style="background:#C0C4C8"></i>Entities</span><span><i style="background:#9b6fc9"></i>Workstreams</span></div></div></div><div class="panel">${panel}</div></div>`;
   drawGlobe(document.getElementById("globe"), pg.pages);
   body.querySelectorAll("[data-v]").forEach(x => x.onclick = () => { state.brainView = x.dataset.v; render(); });
   body.querySelectorAll("[data-page]").forEach(x => x.onclick = () => { state.brainView = "page:" + x.dataset.page; render(); });
@@ -258,7 +258,7 @@ async function pollBuild() {
 }
 
 // Globe: one metal bead per page, lines where pages link with [[...]]. Drag to turn, click to open.
-const METAL = { Concepts: ["#F1DDA0", "#C5A15A", "#6E5222"], Entities: ["#F4F6F8", "#C0C4C8", "#5E6268"], Workstreams: ["#D7C2EE", "#8E5CC2", "#3C1D5C"] };
+const METAL = { Concepts: ["#e8d9b5", "#c2a36a", "#7a5a18"], Entities: ["#F4F6F8", "#C0C4C8", "#5E6268"], Workstreams: ["#d9c3f0", "#9b6fc9", "#5e2b8a"] };
 let globeTimer = null;
 function drawGlobe(cv, pages) {
   if (globeTimer) cancelAnimationFrame(globeTimer);
@@ -296,7 +296,7 @@ function drawGlobe(cv, pages) {
     edges.forEach(([a, b]) => {
       const A = P.get(a), B = P.get(b), depth = (A.Z + B.Z + 2) / 4;
       const g = ctx.createLinearGradient(A.X, A.Y, B.X, B.Y);
-      g.addColorStop(0, `rgba(197,161,90,${0.15 + depth * 0.45})`); g.addColorStop(1, `rgba(192,196,200,${0.15 + depth * 0.45})`);
+      g.addColorStop(0, `rgba(194,163,106,${0.15 + depth * 0.45})`); g.addColorStop(1, `rgba(192,196,200,${0.15 + depth * 0.45})`);
       ctx.strokeStyle = g; ctx.lineWidth = 1 + depth; ctx.beginPath(); ctx.moveTo(A.X, A.Y); ctx.lineTo(B.X, B.Y); ctx.stroke();
     });
     shown = [...P.entries()].sort((a, b) => a[1].Z - b[1].Z);
