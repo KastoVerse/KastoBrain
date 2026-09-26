@@ -174,7 +174,7 @@
 <body>
 <aside>
   <div class="logo">KastoBrain<span class="sparkle" style="left:-4px;top:2px"></span><span class="sparkle" style="right:-6px;top:-2px;animation-delay:1.1s"></span><span class="sparkle" style="left:48%;bottom:-3px;animation-delay:2s"></span></div>
-  <a class="nav" data-page="pc" style="margin-top:14px"><span class="i">🧠</span>PC Brain</a>
+  <a class="nav" data-page="pc" style="margin-top:14px" title="All your brains in one place, search across them, and the file tidy-up check"><span class="i">🧠</span>PC Brain</a>
   <h4>Brains</h4>
   <div id="projects"></div>
   <a class="nav" id="newBrain" style="color:var(--gold)" title="Create a new brain"><span class="i">＋</span>New brain</a>
@@ -332,12 +332,25 @@ function listen(box, btn) {
   rec.start();
 }
 
+let lastUtterance = null;   // kept so the browser doesn't drop it mid-sentence
+function sayIt(text, voiceName) {
+  if (!window.speechSynthesis) return alert("Read aloud isn't available in this browser. Open KastoBrain with the desktop icon (Edge).");
+  const go = () => {
+    const voices = speechSynthesis.getVoices();
+    if (!voices.length) return alert("No voices found on this PC. In Windows: Settings → Time & language → Speech → Add voices. Then reopen KastoBrain.");
+    speechSynthesis.cancel(); speechSynthesis.resume();
+    const u = new SpeechSynthesisUtterance(text);
+    u.voice = voices.find(v => v.name === voiceName) || voices.find(v => v.default) || voices[0];
+    u.lang = u.voice.lang; u.volume = 1; u.rate = 1;
+    u.onerror = e => { if (e.error !== "interrupted" && e.error !== "canceled") alert("Read aloud problem: " + e.error + ". Check the PC's sound is on and the right speaker is selected."); };
+    lastUtterance = u;
+    setTimeout(() => speechSynthesis.speak(u), 60);
+  };
+  if (speechSynthesis.getVoices().length) go();
+  else { speechSynthesis.onvoiceschanged = () => { speechSynthesis.onvoiceschanged = null; go(); }; setTimeout(go, 1200); }
+}
 function speak(text) {
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text.replace(/\[(page|file|web):[^\]]*\]/g, "").replace(/[#*_`>]/g, ""));
-  const want = (state.settings.personality || {}).voice;
-  const v = speechSynthesis.getVoices().find(v => v.name === want); if (v) u.voice = v;
-  speechSynthesis.speak(u);
+  sayIt(text.replace(/\[(page|file|web):[^\]]*\]/g, "").replace(/[#*_`>]/g, ""), (state.settings.personality || {}).voice);
 }
 
 
@@ -577,9 +590,7 @@ function renderSettings(body) {
         `<option ${v.name === want ? "selected" : ""}>${esc(v.name)}</option>`).join(""); };
     fill(); speechSynthesis.onvoiceschanged = fill;
     document.getElementById("testVoice").onclick = () => {
-      const u = new SpeechSynthesisUtterance("Hello, this is your KastoBrain voice.");
-      const v = speechSynthesis.getVoices().find(v => v.name === document.getElementById("voice").value); if (v) u.voice = v;
-      speechSynthesis.speak(u);
+      sayIt("Hello, this is your KastoBrain voice.", document.getElementById("voice").value);
     };
   }
 }
@@ -636,6 +647,7 @@ async function renderPC() {
     <div class="title"><div class="dot">PC</div>PC Brain</div>
     <div class="tabs"><div class="tab on">Overview</div></div>
     <div class="body"><div class="panel" style="max-width:1000px">
+      <p class="hint" style="font-size:13px"><b>What is PC Brain?</b> Your brains are one per topic (for example Insurance). PC Brain is the view over <b>all</b> of them: see every brain, search across all of them at once, and check your PC for duplicate or junk files (it only suggests; it never moves or deletes).</p>
       <h3>All brains</h3><p class="hint">Every brain on this PC. Click a name to open it.</p>
       <table class="pc"><tr><th>Brain</th><th>Pages</th><th>Pending</th><th>Questions</th><th>AI</th></tr>${rows || '<tr><td colspan="5" class="muted">No brains yet. Click ＋ New brain on the left.</td></tr>'}</table>
       <h3>Search every brain</h3><p class="hint">Type a word or name and press Search. It looks through the pages of all brains.</p>
@@ -765,11 +777,17 @@ async function refreshFoot() {
   const f = document.getElementById("foot"); if (!f || !s) return;
   const busy = [...s.busy.building.map(b => `building ${b}`), ...Object.entries(s.busy.skills).map(([b, k]) => `${k} on ${b}`)];
   f.innerHTML = `<span class="bell" id="bell" title="Notifications">🔔${s.unread ? `<span class="n">${s.unread}</span>` : ""}</span>
-    <div>● Engine <b>running</b></div>
+    <div>● Engine <b>running</b> · <a id="stopEng" style="cursor:pointer;color:var(--dim);text-decoration:underline" title="Stops KastoBrain's engine. Click the KastoBrain icon to start it again.">Stop engine</a></div>
     <div>AI agents: <b>${s.agents ? `${s.agents.installed} installed · ${s.agents.connected} connected` : "check in Settings"}</b></div>
     <div>Version <b>${esc(s.version)}</b>${s.update.available ? ' · <b style="color:var(--gold)">update ready</b>' : s.update.error ? " · update check failed" : ""}</div>
     ${busy.length ? `<div style="color:var(--violet)">⟳ ${esc(busy.join(", "))}</div>` : ""}`;
   document.getElementById("bell").onclick = showNotifications;
+  document.getElementById("stopEng").onclick = async () => {
+    if (!confirm("Stop KastoBrain's engine? The app stops working until you click the KastoBrain icon again.")) return;
+    const r = await fetch("/api/stop", { method: "POST" }).then(r => r.json()).catch(() => ({ ok: true }));
+    if (!r.ok) return alert(r.error);
+    document.getElementById("main").innerHTML = '<div class="placeholder">Engine stopped. You can close this window. Click the KastoBrain icon to start again.</div>';
+  };
 }
 
 async function showNotifications() {
@@ -812,8 +830,7 @@ async function renderAppSettings() {
   const fill = () => { const sel = document.getElementById("aVoice"); if (!sel) return;
     sel.innerHTML = `<option value="">Windows default</option>` + speechSynthesis.getVoices().map(v => `<option ${v.name === p.voice ? "selected" : ""}>${esc(v.name)}</option>`).join(""); };
   fill(); speechSynthesis.onvoiceschanged = fill;
-  document.getElementById("aTest").onclick = () => { const u = new SpeechSynthesisUtterance(`Hello, I'm ${document.getElementById("aName").value}.`);
-    const v = speechSynthesis.getVoices().find(v => v.name === document.getElementById("aVoice").value); if (v) u.voice = v; speechSynthesis.speak(u); };
+  document.getElementById("aTest").onclick = () => sayIt(`Hello, I'm ${document.getElementById("aName").value}.`, document.getElementById("aVoice").value);
   document.getElementById("aSave").onclick = async () => {
     const r = await postJSON("/api/app-settings", { agent_name: document.getElementById("aName").value,
       personality: { tone: document.getElementById("aTone").value, length: document.getElementById("aLen").value, voice: document.getElementById("aVoice").value },
@@ -826,6 +843,23 @@ async function renderAppSettings() {
 }
 
 // ---------- 🔌 Connectors ----------
+const AGENT_SETUP = {
+  chatgpt: ["npm install -g @openai/codex", "codex login", "Sign in with your ChatGPT account when the browser opens."],
+  claude: ["irm https://claude.ai/install.ps1 | iex", "claude", "Type /login if asked and sign in with your normal Claude account. Then close it."],
+  gemini: ["npm install -g @google/gemini-cli", "gemini", "Choose \"Login with Google\" and sign in. Then close it."],
+  grok: ["", "", "Install Grok's command-line tool from xAI's own instructions, so that typing grok in PowerShell works. (KastoBrain can't confirm the exact install command yet.)"],
+};
+function agentSteps(key) {
+  const [inst, login, note] = AGENT_SETUP[key] || ["", "", ""];
+  return `<details style="margin-top:8px"><summary class="muted" style="cursor:pointer">How to set it up</summary>
+    <ol style="font-size:12px;padding-left:18px;margin:6px 0">
+      <li>Open <b>PowerShell</b> (Start menu → type PowerShell → Enter).</li>
+      ${inst ? `<li>Install it: paste this and press Enter<code class="cp">${esc(inst)}</code></li>` : ""}
+      ${login ? `<li>Sign in: open a <b>new</b> PowerShell window, paste this and press Enter<code class="cp">${esc(login)}</code></li>` : ""}
+      <li>${esc(note)}</li>
+      <li>Come back here, press <b>Re-check</b> in ⚙ Settings → AI status, then press <b>Connect</b> on this card.</li></ol>
+    <p class="hint">Codex and Gemini installs need Node.js (nodejs.org, LTS version) first.</p></details>`;
+}
 const APP_CARDS = [
   ["📁", "Google Drive", "Link your Google Drive folder (the synced G: drive) to a brain. It reads the files there.", "folder"],
   ["☁", "OneDrive", "Link your synced OneDrive folder to a brain.", "folder"],
@@ -845,7 +879,7 @@ async function renderConnectors() {
   const agents = st.ais.map(x => `<div class="gcard"><h4>${esc(x.label)}</h4>
       <p>${x.installed ? "Installed on this PC." : "Not installed on this PC."} ${x.mcp === true ? "KastoBrain is connected: this AI can read your brains." : ""}</p>
       ${x.installed && x.key !== "grok" ? (x.mcp === true ? `<button data-mcp="${x.key}" data-on="0">Disconnect</button>` : `<button class="build" style="margin:0" data-mcp="${x.key}" data-on="1">Connect</button>`)
-        : x.installed ? '<span class="pill">use the copy-paste setup below</span>' : '<span class="pill no">install it first</span>'}</div>`).join("");
+        : x.installed ? '<span class="pill">use the copy-paste setup below</span>' : '<span class="pill no">not set up yet</span>'}${agentSteps(x.key)}</div>`).join("");
   const apps = APP_CARDS.map(([i, n, d, k]) => `<div class="gcard"><h4>${i} ${n}</h4><p>${d}</p>
       ${k === "folder" ? `<button data-link="${n}">Link a folder…</button>` : k === "soon" ? '<span class="pill">coming later</span>' : '<span class="pill ok">available</span>'}</div>`).join("");
   const custom = mc.map((m, i) => `<div class="gcard"><h4>🧩 ${esc(m.name)}</h4><p>${esc(m.url || (Array.isArray(m.command) ? m.command.join(" ") : m.command) || "")}</p>
@@ -910,7 +944,7 @@ async function renderSkillsPage() {
       <button class="build" style="margin:6px 0 0" data-run="${esc(sk.id)}" ${pr.projects.length ? "" : "disabled"}>Run</button>
       <button data-edit="${esc(sk.id)}" style="margin-top:6px">Edit</button>
       ${sk.builtin ? "" : `<button data-rm="${esc(sk.id)}" style="margin-top:6px">Remove</button>`}</div>`).join("");
-  pageShell("🧩", "Skills", "Ready-made jobs you can run on any brain. Pick a brain and press <b>Run</b>. The result is saved as a report (see <b>Downloads</b>). Skills only read; they never change a brain.", `
+  pageShell("🧩", "Skills", "<b>Skills are shared:</b> every brain has the same list, and a skill you make here appears in every brain. Each run works on <b>one</b> brain: pick it, then press <b>Run</b>. The result is saved as a report (see <b>Downloads</b>). Skills only read; they never change a brain.", `
     <div class="grid">${cards}</div>
     <div class="run" id="skForm"><b id="skTitle">+ Make your own skill</b>
       <input type="hidden" id="skId">
@@ -966,7 +1000,7 @@ async function renderWorkflows() {
       <p><b>Brain:</b> ${esc(x.brain || "(none)")} · <b>When:</b> ${TRIG[x.trigger]}<br><b>Steps:</b> ${x.steps.map(stepName).map(esc).join(" → ") || "none"}${x.notify ? " → 🔔 notify me" : ""}<br>
       <b>Last run:</b> ${esc(x.last_run || "never")} · ${x.enabled ? '<span class="pill ok">on</span>' : '<span class="pill">off</span>'}</p>
       <button class="build" style="margin:0" data-wrun="${esc(x.id)}">Run now</button> <button data-wtog="${i}">${x.enabled ? "Turn off" : "Turn on"}</button> <button data-wdel="${i}">Remove</button></div>`).join("");
-  pageShell("🔁", "Workflows", "Chains of jobs that run by themselves. Builds from workflows still wait in <b>Pending approval</b>; nothing goes into a brain without you. Automatic workflows run while KastoBrain is open.", `
+  pageShell("🔁", "Workflows", "<b>Each workflow belongs to one brain</b> (shown on its card). To do the same for another brain, make another workflow and pick that brain. Workflows are chains of jobs that run by themselves. Builds from workflows still wait in <b>Pending approval</b>; nothing goes into a brain without you. Automatic workflows run while KastoBrain is open.", `
     <div class="grid">${rows || '<div class="placeholder">No workflows yet. Make one below.</div>'}</div>
     <div class="run"><b>+ New workflow</b>
       <p class="hint" style="margin:8px 0 4px">Start from</p><select id="wTpl">${w.templates.map((t, i) => `<option value="${i}">${esc(t.name)}</option>`).join("")}<option value="-1">Blank</option></select>

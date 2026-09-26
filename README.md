@@ -79,7 +79,7 @@ It asks first, then puts a **KastoBrain** icon on your Desktop and in the Start 
 **Click the icon.** KastoBrain opens in its own window like any other program:
 - no black window; the engine runs hidden,
 - click the icon again and it just reopens,
-- close the window and KastoBrain stops by itself about 3 minutes later.
+- the engine keeps running until you shut down the PC or click **Stop engine** (bottom left of the app).
 
 (`start-kastobrain.bat` still works too, if you ever want to see the engine's messages.
 Engine messages are also kept in `Logs\engine.log`, plus one previous log.)

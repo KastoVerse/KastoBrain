@@ -3,7 +3,7 @@
 - If KastoBrain is already running, it just opens the app window.
 - Otherwise it starts the engine hidden (no black window), waits until it
   is ready, then opens the app in its own window (Edge app mode).
-- The engine stops by itself a few minutes after the last app window closes.
+- The engine keeps running until the PC shuts down or you press Stop engine in the app.
 - Engine messages go to Logs\\engine.log (current) and engine.previous.log.
 """
 
@@ -20,7 +20,6 @@ PORT = 8765
 URL = f"http://127.0.0.1:{PORT}"
 APP = Path(__file__).resolve().parent
 ROOT = APP.parent
-IDLE_SECONDS = 180
 
 
 def running():
@@ -45,8 +44,7 @@ def start_engine():
         python = python.with_name("python.exe")
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
     with open(log, "w", encoding="utf-8") as out:
-        subprocess.Popen([str(python), str(APP / "server.py"), str(ROOT), "--port", str(PORT),
-                          "--auto-exit", str(IDLE_SECONDS)],
+        subprocess.Popen([str(python), "-u", str(APP / "server.py"), str(ROOT), "--port", str(PORT)],  # -u: log written live
                          cwd=str(APP), stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
                          creationflags=flags, close_fds=True)
 

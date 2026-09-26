@@ -498,6 +498,11 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/api/projects":
                 return self.send_json({"created": brain.create_project(ROOT, read_body(self).get("name", ""))})
+            if path == "/api/stop":
+                if RUNNING or ASKING or SKILLS_RUNNING:
+                    return self.send_json({"ok": False, "error": "A job is still running. Try again when it finishes."})
+                threading.Timer(1.0, lambda: os._exit(0)).start()
+                return self.send_json({"ok": True})
             if path == "/api/update/apply":
                 return self.send_json(update_apply())
             if path == "/api/update/rollback":
