@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KastoBrain</title>
+<link rel="icon" href="/favicon.ico">
 <style>
   :root {
     --bg:#1E1D24; --side:#16151B; --panel:#26242E; --line:#3A3744; --text:#D8DAE0; --dim:#9A98A6;
@@ -140,6 +141,7 @@
   <h4>Sessions</h4>
   <div id="sessNav"><div class="nav muted">None yet</div></div>
 </aside>
+<div id="updBar" style="display:none;position:fixed;top:0;left:230px;right:0;z-index:5;padding:8px 18px;background:rgba(94,43,138,.92);border-bottom:1px solid var(--gold);font-size:13px"></div>
 <main id="main"><div class="muted">Loading…</div></main>
 
 <script>
@@ -239,6 +241,28 @@ async function pollDry() {
   if (d.sorting) { st.className = "status building"; st.textContent = d.sorting[d.sorting.length - 1] || "Scanning…"; setTimeout(pollDry, 1500); }
   else renderPC();
 }
+
+// tell the engine a window is open (it stops itself a few minutes after the last window closes)
+setInterval(() => fetch("/api/ping").catch(() => {}), 30000);
+fetch("/api/ping").catch(() => {});
+
+async function checkUpdate() {
+  const bar = document.getElementById("updBar");
+  const u = await fetch("/api/update").then(r => r.json()).catch(() => null);
+  if (!u || !u.available) return;
+  bar.style.display = "block";
+  bar.innerHTML = `<b class="metal">Update available</b> · ${u.changes.length} change(s): ${esc(u.changes.slice(0, 3).map(c => c.replace(/^\w+ /, "")).join("; "))}
+    <button class="build" id="updGo" style="margin-left:12px;padding:4px 12px">Update now</button>
+    <button id="updLater" style="margin-left:6px;padding:4px 10px">Later</button>
+    <div class="muted" style="font-size:11px;margin-top:3px">Only the program is updated. Your brains, wiki and settings are not touched. The old version is kept so it can be rolled back.</div>`;
+  document.getElementById("updLater").onclick = () => bar.style.display = "none";
+  document.getElementById("updGo").onclick = async () => {
+    bar.textContent = "Updating…";
+    const r = await fetch("/api/update/apply", { method: "POST" }).then(r => r.json());
+    bar.innerHTML = r.ok ? `Updated ${esc(r.from)} → ${esc(r.to)}. <b>${esc(r.note)}</b>` : `Update failed: ${esc(r.detail || "")}`;
+  };
+}
+checkUpdate();
 
 state.filesPath = ""; openProject(a.dataset.p); });
   openProject(state.project || r.projects[0]);

@@ -11,7 +11,9 @@ Usage:
 """
 
 import argparse
+import os
 import json
+import subprocess
 import sys
 import threading
 import time
@@ -27,6 +29,8 @@ WEB = Path(__file__).resolve().parent / "web"
 ROOT = None
 
 RUNNING = {}          # project -> list of log lines while a build runs
+LAST_PING = [time.time()]   # last time an open app window said "still here"
+CODE = Path(__file__).resolve().parent.parent   # the KastoBrain program folder (a git clone)
 ASKING = set()        # projects with a question being answered
 
 EDITABLE = {"description", "instructions", "links", "ai", "ai_ask", "ai_check", "memory", "never_send", "folders"}
@@ -118,6 +122,58 @@ def read_body(handler):
     return json.loads(handler.rfile.read(length) or b"{}")
 
 
+def git(*args, timeout=60):
+    p = subprocess.run(["git", "-C", str(CODE), *args], capture_output=True, text=True, timeout=timeout,
+                       stdin=subprocess.DEVNULL, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    return p.returncode, (p.stdout + p.stderr).strip()
+
+
+def update_status():
+    """Free check: is there newer approved code on GitHub? Changes nothing."""
+    code, branch = git("rev-parse", "--abbrev-ref", "HEAD")
+    if code:
+        return {"available": False, "error": "not a git download"}
+    code, out = git("fetch", "--quiet", "origin", branch)
+    if code:
+        return {"available": False, "error": "could not reach GitHub", "detail": out[-300:]}
+    _, log = git("log", "--oneline", f"HEAD..origin/{branch}")
+    changes = [l for l in log.splitlines() if l.strip()]
+    return {"available": bool(changes), "branch": branch, "changes": changes[:20]}
+
+
+def update_apply():
+    """Only runs when you press Update now. Replaces program code only; your brains are untouched."""
+    _, before = git("rev-parse", "HEAD")
+    _, branch = git("rev-parse", "--abbrev-ref", "HEAD")
+    code, out = git("pull", "--ff-only", "origin", branch, timeout=300)
+    if code:
+        return {"ok": False, "detail": out[-500:]}
+    (ROOT / "Logs").mkdir(exist_ok=True)
+    (ROOT / "Logs" / "update-previous-version.txt").write_text(before + "\n", encoding="utf-8")
+    _, after = git("rev-parse", "HEAD")
+    return {"ok": True, "from": before[:7], "to": after[:7],
+            "note": "Close KastoBrain and open it again to use the new version."}
+
+
+def update_rollback():
+    f = ROOT / "Logs" / "update-previous-version.txt"
+    if not f.exists():
+        return {"ok": False, "detail": "no previous version recorded"}
+    prev = f.read_text(encoding="utf-8").strip()
+    _, branch = git("rev-parse", "--abbrev-ref", "HEAD")
+    code, out = git("checkout", "-B", branch, prev)
+    return {"ok": code == 0, "to": prev[:7], "detail": out[-300:],
+            "note": "Close KastoBrain and open it again to use the previous version."}
+
+
+def idle_watch(limit):
+    """Stop the hidden engine when no app window has been open for `limit` seconds."""
+    while True:
+        time.sleep(15)
+        if time.time() - LAST_PING[0] > limit and not RUNNING and not ASKING and "log" not in SORTING:
+            os._exit(0)
+
+
 def scheduler():
     """Hourly/daily auto-update. Results only ever go to Pending."""
     last = {}
@@ -154,6 +210,18 @@ class Handler(BaseHTTPRequestHandler):
         parts = urlsplit(self.path)
         query = parse_qs(parts.query)
         path = unquote(parts.path)
+        if path in ("/icon.png", "/favicon.ico"):
+            body = (WEB / ("icon.png" if path == "/icon.png" else "kastobrain.ico")).read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png" if path == "/icon.png" else "image/x-icon")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            return self.wfile.write(body)
+        if path == "/api/ping":
+            LAST_PING[0] = time.time()
+            return self.send_json({"ok": True})
+        if path == "/api/update":
+            return self.send_json(update_status())
         if path == "/" or path == "/index.html":
             body = (WEB / "index.html").read_bytes()
             self.send_response(200)
@@ -197,6 +265,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/api/projects":
                 return self.send_json({"created": brain.create_project(ROOT, read_body(self).get("name", ""))})
+            if path == "/api/update/apply":
+                return self.send_json(update_apply())
+            if path == "/api/update/rollback":
+                return self.send_json(update_rollback())
             if path == "/api/pcbrain/settings":
                 return self.send_json({"saved": pc_sorter.save_settings(ROOT, read_body(self))})
             if path == "/api/pcbrain/dryrun":
@@ -268,12 +340,16 @@ def main():
     parser = argparse.ArgumentParser(description="Run the KastoBrain app on this PC.")
     parser.add_argument("root", help="KastoBrain root, e.g. H:\\KastoBrain")
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--auto-exit", type=int, default=0, metavar="SECONDS",
+                        help="stop by itself when no app window has been open this long")
     args = parser.parse_args()
     ROOT = Path(args.root)
     if not (ROOT / "Projects").is_dir():
         print(f"No Projects folder in {ROOT}. Run setup_layout.py first.")
         return 1
     threading.Thread(target=scheduler, daemon=True).start()
+    if args.auto_exit:
+        threading.Thread(target=idle_watch, args=(args.auto_exit,), daemon=True).start()
     print(f"=== KastoBrain running ===\nRoot: {ROOT}\nOpen: http://127.0.0.1:{args.port}\nStop: Ctrl+C")
     ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
     return 0
