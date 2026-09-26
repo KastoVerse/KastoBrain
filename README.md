@@ -140,12 +140,19 @@ H:\KastoBrain\
 
 ## Tested / not yet tested
 
-**Tested (in the cloud, on made-up test documents):** folder setup, the app screens, Build Brain
-with Claude (made its own pages, researched online, skipped the private folder, waited for approval),
-approve/reject, Ask with Claude (read-only, nothing changed), New Brain, cross-brain search,
-Files tab (refuses folders outside the brain), PC sorter dry run (nothing moved),
-MCP connector used from Claude Code.
+**Tested (in the cloud, on made-up test documents only):**
 
-**Not yet tested:** Codex and Gemini CLI (not installed on the test machine), the `.bat` files
-(Windows only), real PDFs / Word files / scans, and Codex's web research inside Build Brain.
+| Test | Claude Code | ChatGPT / Codex |
+|---|---|---|
+| Build Brain makes its own pages, cites sources, researches online | PASS | PASS (5 pages, afca.org.au cited, 75 s) |
+| Private "never send" folder not read | PASS | PASS |
+| Live wiki unchanged until approved; approve works | PASS | PASS |
+| Ask answers with sources; wiki and documents unchanged | PASS | PASS (clean final answer, about 27 s) |
+| MCP connector used from the AI app | PASS | PASS |
+
+Also tested: New Brain, cross-brain search, Files tab (refuses folders outside the brain),
+PC sorter dry run (nothing moved), and the app screens.
+
+**Not yet tested:** Gemini CLI (it refuses to sign in from a cloud machine; test it on your PC),
+the `.bat` files (Windows only), and real PDFs / Word files / scans.
 Run the first brain on a small folder and check the Pending result before trusting it with more.

@@ -38,6 +38,11 @@ TOOLS = [
 ]
 
 
+for _t in TOOLS:   # read tools are safe: label them so AI apps can run them without asking
+    _t["annotations"] = ({"readOnlyHint": True} if _t["name"] != "build_brain"
+                         else {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False})
+
+
 def need(name):
     pdir = brain.project_dir(ROOT, name)
     if not pdir:

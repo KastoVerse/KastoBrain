@@ -27,6 +27,8 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -153,7 +155,8 @@ def run_ai(ai, workdir, prompt, folders, write=True):
     if os.environ.get("KASTOBRAIN_TEST_AI"):
         cmd = [sys.executable, os.environ["KASTOBRAIN_TEST_AI"], prompt]
     elif ai == "chatgpt":
-        cmd = ["codex", "exec", "--skip-git-repo-check",
+        last = Path(tempfile.gettempdir()) / f"kastobrain-codex-{os.getpid()}-{time.time_ns()}.txt"
+        cmd = ["codex", "exec", "--skip-git-repo-check", "--output-last-message", str(last),
                "--sandbox", "workspace-write" if write else "read-only", prompt]
     elif ai == "gemini":
         cmd = ["gemini", "-p", prompt, "--approval-mode", "auto_edit" if write else "default"]
@@ -172,6 +175,15 @@ def run_ai(ai, workdir, prompt, folders, write=True):
                               text=True, encoding="utf-8", errors="replace")
     except FileNotFoundError:
         return 127, f"{cmd[0]} is not installed or not on PATH."
+    if ai == "chatgpt" and not os.environ.get("KASTOBRAIN_TEST_AI"):
+        # Codex prints its whole working log; keep only its final answer.
+        try:
+            final = last.read_text(encoding="utf-8").strip()
+            last.unlink()
+        except OSError:
+            final = ""
+        if proc.returncode == 0 and final:
+            return 0, final
     return proc.returncode, proc.stdout + ("\n" + proc.stderr if proc.stderr.strip() else "")
 
 
