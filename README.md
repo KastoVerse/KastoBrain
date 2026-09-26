@@ -86,10 +86,17 @@ Engine messages are also kept in `Logs\engine.log`, plus one previous log.)
 
 ### Updates
 
-When KastoBrain opens, it checks your GitHub for a newer version (free, no AI).
-If there is one, a banner shows what's new with **Update now**. Nothing updates until you press it.
+When KastoBrain opens, it checks your GitHub for a newer version (free, no AI) and **installs it
+straight away**, then restarts itself. (Switch this off in ⚙ Settings → Updates.)
 Only the program is replaced; your brains, wiki, sessions and settings are never touched,
-and the previous version is recorded so it can be rolled back.
+and the previous version is recorded in `Logs\update-previous-version.txt` so it can be rolled back.
+
+### Reports
+
+Each skill keeps **two generations per brain**: the current report and one previous
+(e.g. `timeline.md` and `timeline.previous.md`). A new run replaces the previous. **Remove** never deletes:
+it moves the file to `FOR REVIEW – TO DELETE`, and every move is listed in
+`FOR REVIEW – TO DELETE\KastoBrain-moves.csv` (from / to) so it can be put back.
 New versions only exist when you approve (merge) a change on GitHub.
 
 ### 4. Make your first brain

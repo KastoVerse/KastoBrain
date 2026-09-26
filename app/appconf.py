@@ -206,6 +206,29 @@ def delete_skill(root, sid):
     return True
 
 
+# ---------------------------------------------------------------- move to review (never delete)
+REVIEW = "FOR REVIEW – TO DELETE"
+
+
+def move_to_review(root, src, sub):
+    """Move a file into FOR REVIEW – TO DELETE/<sub>/ and record it in KastoBrain-moves.csv so it can be put back."""
+    src = Path(src)
+    dest_dir = Path(root) / REVIEW / sub
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest, n = dest_dir / src.name, 1
+    while dest.exists():                                  # never overwrite anything already there
+        n += 1
+        dest = dest_dir / f"{src.stem} ({n}){src.suffix}"
+    shutil.move(str(src), str(dest))
+    log = Path(root) / REVIEW / "KastoBrain-moves.csv"
+    new = not log.exists()
+    with open(log, "a", encoding="utf-8") as f:
+        if new:
+            f.write("time,moved from,moved to\n")
+        f.write(f'{datetime.now().isoformat(timespec="seconds")},"{src}","{dest}"\n')
+    return dest
+
+
 # ---------------------------------------------------------------- downloads & notifications
 def downloads_dir(root):
     d = Path(root) / "Downloads"

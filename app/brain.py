@@ -231,11 +231,64 @@ def run_skill(pdir, skill):
     stamp = datetime.now().strftime("%Y-%m-%d %H%M")
     text = f"# {skill['name']} — {pdir.name}\n\n_{stamp} · {ai} · {round(time.time() - started)}s_\n\n{out.strip()}\n"
     (pdir / "reports").mkdir(exist_ok=True)
-    rep = pdir / "reports" / f"{stamp} - {skill['id']}.md"
-    rep.write_text(text, encoding="utf-8")
-    dl = appconf.downloads_dir(pdir.parent.parent) / f"{pdir.name} - {skill['name']} - {stamp}.md"
-    dl.write_text(text, encoding="utf-8")
-    return {"ok": code == 0, "report": str(rep), "download": str(dl), "text": text}
+    rep = pdir / "reports" / f"{skill['id']}.md"
+    dl = appconf.downloads_dir(pdir.parent.parent) / f"{pdir.name} - {skill['name']}.md"
+    for f in (rep, dl):
+        rotate(f)
+        f.write_text(text, encoding="utf-8")
+    return {"ok": True, "report": str(rep), "download": str(dl), "text": text}
+
+
+def rotate(f):
+    """Two generations: the current file becomes .previous (replacing the old previous)."""
+    f = Path(f)
+    if f.exists():
+        f.replace(f.with_name(f.stem + ".previous" + f.suffix))
+
+
+LEGACY_REPORT = re.compile(r"^\d{4}-\d{2}-\d{2} \d{4}(?:-\d+)? - (.+)\.md$")
+LEGACY_DOWNLOAD = re.compile(r"^(.+) - \d{4}-\d{2}-\d{2} \d{4}\.md$")
+
+
+def tidy_reports(root):
+    """One-off tidy of reports saved the old way (a new file every run).
+    Per skill: newest becomes current, next becomes previous, the rest are MOVED to
+    FOR REVIEW – TO DELETE (never deleted). Returns the number of files moved."""
+    import appconf
+    moved = 0
+
+    def settle(folder, groups, current_name, sub):
+        nonlocal moved
+        for key, files in groups.items():
+            files.sort(key=lambda f: f.name, reverse=True)          # names start with the date, newest first
+            cur = folder / current_name(key)
+            prev = cur.with_name(cur.stem + ".previous" + cur.suffix)
+            for f in files:
+                if not cur.exists():
+                    f.rename(cur)
+                elif not prev.exists():
+                    f.rename(prev)
+                else:
+                    appconf.move_to_review(root, f, sub)
+                    moved += 1
+
+    for name in list_projects(root):
+        d = projects_root(root) / name / "reports"
+        if d.is_dir():
+            groups = {}
+            for f in d.glob("*.md"):
+                m = LEGACY_REPORT.match(f.name)
+                if m:
+                    groups.setdefault(m.group(1), []).append(f)
+            settle(d, groups, lambda k: f"{k}.md", f"KastoBrain old reports/{name}")
+    d = appconf.downloads_dir(root)
+    groups = {}
+    for f in d.glob("*.md"):
+        m = LEGACY_DOWNLOAD.match(f.name)
+        if m:
+            groups.setdefault(m.group(1), []).append(f)
+    settle(d, groups, lambda k: f"{k}.md", "KastoBrain old reports/Downloads")
+    return moved
 
 
 def list_reports(pdir):

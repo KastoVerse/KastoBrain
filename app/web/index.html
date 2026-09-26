@@ -694,16 +694,15 @@ async function checkUpdate(manual) {
   if (!u.available) { if (manual) { bar.style.display = "block"; bar.innerHTML = `You're on the latest version. <button id="updLater" style="margin-left:8px;padding:2px 8px">OK</button>`;
     document.getElementById("updLater").onclick = () => bar.style.display = "none"; } return; }
   bar.style.display = "block";
-  bar.innerHTML = `<b class="metal">Update available</b> · ${u.changes.length} change(s): ${esc(u.changes.slice(0, 3).map(c => c.replace(/^\w+ /, "")).join("; "))}
-    <button class="build" id="updGo" style="margin-left:12px;padding:4px 12px">Update now</button>
-    <button id="updLater" style="margin-left:6px;padding:4px 10px">Later</button>
+  bar.innerHTML = `<b class="metal">Installing update</b> · ${u.changes.length} change(s): ${esc(u.changes.slice(0, 3).map(c => c.replace(/^\w+ /, "")).join("; "))}
     <div class="muted" style="font-size:11px;margin-top:3px">Only the program is updated. Your brains, wiki and settings are not touched. The old version is kept so it can be rolled back.</div>`;
-  document.getElementById("updLater").onclick = () => bar.style.display = "none";
-  document.getElementById("updGo").onclick = async () => {
-    bar.textContent = "Updating…";
-    const r = await fetch("/api/update/apply", { method: "POST" }).then(r => r.json());
-    bar.innerHTML = r.ok ? `Updated ${esc(r.from)} → ${esc(r.to)}. <b>${esc(r.note)}</b>` : `Update failed: ${esc(r.detail || "")}`;
-  };
+  const r = await fetch("/api/update/apply", { method: "POST" }).then(r => r.json()).catch(() => ({ ok: false }));
+  if (!r.ok) { bar.innerHTML = `Update not installed: ${esc(r.detail || "error")} <button id="updLater" style="margin-left:8px;padding:2px 8px">OK</button>`;
+    document.getElementById("updLater").onclick = () => bar.style.display = "none"; return; }
+  bar.innerHTML = `Updated ${esc(r.from)} → ${esc(r.to)}. Restarting…`;
+  const wait = async () => { await new Promise(res => setTimeout(res, 1500));
+    try { await fetch("/api/ping"); location.reload(); } catch { wait(); } };
+  setTimeout(wait, 2500);
 }
 
 // ---------- Globe ----------
@@ -821,7 +820,7 @@ async function renderAppSettings() {
     <div class="section"><h3>AI team (defaults for new brains)</h3><p class="hint">Which AI does which job. They run on your own plans.</p>
       ${aiSelect("aAi", "AI that builds brains", s.ai, false)}${aiSelect("aAsk", "AI that answers questions", s.ai_ask, false)}${aiSelect("aChk", "Checker AI", s.ai_check, true)}</div>
     <div class="section"><h3>Updates</h3>
-      <div class="row"><span>Check for a new version when KastoBrain opens<br><small class="muted">Free; only the program changes, never your brains. Nothing updates until you press Update now.</small></span>
+      <div class="row"><span>Install new versions automatically when KastoBrain opens<br><small class="muted">Free; only the program changes, never your brains. The previous version is kept for rollback.</small></span>
       <input type="checkbox" id="aUpd" ${s.update_check ? "checked" : ""}></div>
       <div class="row"><span>Check now</span><button id="aUpdNow">Check for updates</button></div></div>
     <div class="section"><h3>Storage</h3><p class="hint">All brains, files and downloads are stored here on this PC:</p><code class="cp">${esc(a.root)}</code></div>
@@ -983,7 +982,14 @@ async function fillBrainSkills() {
       <button class="build" style="margin:0" data-srun="${esc(sk.id)}" ${rp.running ? "disabled" : ""}>Run</button></div>`).join("")}</div>
     ${rp.running ? `<p class="status building">Running: ${esc(rp.running)}…</p>` : ""}
     <h3>Reports for this brain</h3>${rp.reports.length ? `<table class="files">${rp.reports.map(r => `<tr><td>${esc(r.name)}</td>
-      <td style="width:40px"><a href="${P()}/download?path=${encodeURIComponent(r.path)}" download title="Download">⬇</a></td></tr>`).join("")}</table>` : '<div class="placeholder">No reports yet.</div>'}`;
+      <td style="width:40px"><a href="${P()}/download?path=${encodeURIComponent(r.path)}" download title="Download">⬇</a></td>
+      <td style="width:80px"><button data-rrm="${esc(r.name)}" style="padding:2px 8px" title="Moves it to FOR REVIEW – TO DELETE. Nothing is deleted.">Remove</button></td></tr>`).join("")}</table>
+      <p class="hint">Each skill keeps its latest report and one previous. Remove moves a report to <b>FOR REVIEW – TO DELETE</b>; nothing is deleted.</p>` : '<div class="placeholder">No reports yet.</div>'}`;
+  box.querySelectorAll("[data-rrm]").forEach(b => b.onclick = async () => {
+    if (!confirm(`Move "${b.dataset.rrm}" to FOR REVIEW – TO DELETE?`)) return;
+    const r = await postJSON("/api/reports/remove", { brain: state.project, name: b.dataset.rrm });
+    if (r.error) alert(r.error); fillBrainSkills();
+  });
   box.querySelectorAll("[data-srun]").forEach(b => b.onclick = async () => {
     const r = await fetch(`${P()}/skill/${encodeURIComponent(b.dataset.srun)}`, { method: "POST" }).then(r => r.json()).catch(() => ({}));
     if (r.error) alert(r.error); fillBrainSkills(); refreshFoot();
@@ -1039,10 +1045,16 @@ async function renderDownloads() {
   const d = await getJSON("/api/downloads");
   const size = n => n < 1048576 ? (n / 1024).toFixed(0) + " KB" : (n / 1048576).toFixed(1) + " MB";
   const rows = d.files.map(f => `<tr><td>${f.name.endsWith(".zip") ? "🗜" : "📄"} ${esc(f.name)}</td><td class="dt">${new Date(f.mtime * 1000).toLocaleString()}</td>
-      <td class="sz">${size(f.size)}</td><td style="width:40px"><a href="/api/downloads/file?name=${encodeURIComponent(f.name)}" download title="Download">⬇</a></td></tr>`).join("");
+      <td class="sz">${size(f.size)}</td><td style="width:40px"><a href="/api/downloads/file?name=${encodeURIComponent(f.name)}" download title="Download">⬇</a></td>
+      <td style="width:80px"><button data-drm="${esc(f.name)}" style="padding:2px 8px" title="Moves it to FOR REVIEW – TO DELETE. Nothing is deleted.">Remove</button></td></tr>`).join("");
   pageShell("⬇", "Downloads", "Everything you've exported: brain zips and skill reports. They're also saved in this folder on your PC:", `
     <code class="cp">${esc(d.folder)}</code>
-    <div style="margin-top:14px">${rows ? `<table class="files">${rows}</table>` : '<div class="placeholder">Nothing here yet. Use <b>⬇ Download brain (.zip)</b> on a brain, or run a <b>Skill</b>.</div>'}</div>`);
+    <div style="margin-top:14px">${rows ? `<table class="files">${rows}</table><p class="hint">Reports keep the latest and one previous. Remove moves a file to <b>FOR REVIEW – TO DELETE</b>; nothing is deleted.</p>` : '<div class="placeholder">Nothing here yet. Use <b>⬇ Download brain (.zip)</b> on a brain, or run a <b>Skill</b>.</div>'}</div>`);
+  document.querySelectorAll("[data-drm]").forEach(b => b.onclick = async () => {
+    if (!confirm(`Move "${b.dataset.drm}" to FOR REVIEW – TO DELETE?`)) return;
+    const r = await postJSON("/api/downloads/remove", { name: b.dataset.drm });
+    if (r.error) alert(r.error); renderDownloads();
+  });
 }
 
 async function checkUpdateNow() { return checkUpdate(true); }

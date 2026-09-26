@@ -49,6 +49,29 @@ def start_engine():
                          creationflags=flags, close_fds=True)
 
 
+def auto_update():
+    """Install newer program code from GitHub before the engine starts (brains are never touched)."""
+    import json
+    try:
+        s = json.loads((ROOT / "app-settings.json").read_text(encoding="utf-8"))
+    except Exception:
+        s = {}
+    if s.get("update_check") is False:
+        return
+    run = lambda *a: subprocess.run(["git", "-C", str(ROOT), *a], capture_output=True, text=True, timeout=120,
+                                    stdin=subprocess.DEVNULL, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    try:
+        branch = run("rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+        before = run("rev-parse", "HEAD").stdout.strip()
+        if run("fetch", "--quiet", "origin", branch).returncode or not run("log", "--oneline", "HEAD..FETCH_HEAD").stdout.strip():
+            return
+        if run("pull", "--ff-only", "origin", branch).returncode == 0:
+            (ROOT / "Logs").mkdir(exist_ok=True)
+            (ROOT / "Logs" / "update-previous-version.txt").write_text(before + "\n", encoding="utf-8")
+    except Exception:
+        pass                                            # no internet or no git: just start as is
+
+
 def open_window():
     candidates = [shutil.which("msedge"),
                   os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
@@ -68,6 +91,7 @@ def main():
         webbrowser.open("file:///" + str(ROOT / "README.md"))
         return
     if not running():
+        auto_update()
         start_engine()
         for _ in range(60):                            # wait up to 30 seconds
             if running():

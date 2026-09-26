@@ -314,7 +314,9 @@ def update_status():
 
 
 def update_apply():
-    """Only runs when you press Update now. Replaces program code only; your brains are untouched."""
+    """Installs newer program code from GitHub. Replaces program code only; your brains are untouched."""
+    if RUNNING or ASKING or SKILLS_RUNNING:
+        return {"ok": False, "detail": "a job is running; the update will install next time KastoBrain opens"}
     _, before = git("rev-parse", "HEAD")
     _, branch = git("rev-parse", "--abbrev-ref", "HEAD")
     code, out = git("pull", "--ff-only", "origin", branch, timeout=300)
@@ -323,8 +325,14 @@ def update_apply():
     (ROOT / "Logs").mkdir(exist_ok=True)
     (ROOT / "Logs" / "update-previous-version.txt").write_text(before + "\n", encoding="utf-8")
     _, after = git("rev-parse", "HEAD")
-    return {"ok": True, "from": before[:7], "to": after[:7],
-            "note": "Close KastoBrain and open it again to use the new version."}
+    threading.Timer(1.0, restart).start()               # start again on the new code
+    return {"ok": True, "from": before[:7], "to": after[:7], "note": "KastoBrain is restarting on the new version."}
+
+
+def restart():
+    subprocess.Popen([sys.executable, "-u", *sys.argv], cwd=str(Path(__file__).resolve().parent),
+                     stdin=subprocess.DEVNULL, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    os._exit(0)
 
 
 def update_rollback():
@@ -502,6 +510,20 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/api/projects":
                 return self.send_json({"created": brain.create_project(ROOT, read_body(self).get("name", ""))})
+            if path == "/api/reports/remove":
+                b = read_body(self)
+                pdir = project_dir(b.get("brain", ""))
+                f = pdir and pdir / "reports" / Path(str(b.get("name", ""))).name
+                if not f or not f.is_file():
+                    return self.send_json({"error": "report not found"}, 404)
+                dest = appconf.move_to_review(ROOT, f, f"KastoBrain removed reports/{pdir.name}")
+                return self.send_json({"ok": True, "moved_to": str(dest)})
+            if path == "/api/downloads/remove":
+                f = appconf.downloads_dir(ROOT) / Path(str(read_body(self).get("name", ""))).name
+                if not f.is_file():
+                    return self.send_json({"error": "file not found"}, 404)
+                dest = appconf.move_to_review(ROOT, f, "KastoBrain removed reports/Downloads")
+                return self.send_json({"ok": True, "moved_to": str(dest)})
             if path == "/api/stop":
                 if RUNNING or ASKING or SKILLS_RUNNING:
                     return self.send_json({"ok": False, "error": "A job is still running. Try again when it finishes."})
@@ -675,6 +697,13 @@ def main():
     if not (ROOT / "Projects").is_dir():
         print(f"No Projects folder in {ROOT}. Run setup_layout.py first.")
         return 1
+    try:
+        moved = brain.tidy_reports(ROOT)
+        if moved:
+            appconf.notify(ROOT, f"Reports now keep only the current and previous version. {moved} older report(s) "
+                                 f"were moved (not deleted) to {appconf.REVIEW}\\KastoBrain old reports.", "info")
+    except Exception as e:
+        print("Report tidy-up skipped:", e)
     threading.Thread(target=scheduler, daemon=True).start()
     if args.auto_exit:
         threading.Thread(target=idle_watch, args=(args.auto_exit,), daemon=True).start()
