@@ -216,3 +216,14 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# KastoBrain: never upload brain data or personal files. Only app code goes to GitHub.
+PC-Brain/
+Projects/
+FOR REVIEW – TO DELETE/
+Logs/
+*.pdf
+*.docx
+*.xlsx
+*.eml
+*.msg

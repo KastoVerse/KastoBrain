@@ -1,0 +1,104 @@
+"""KastoBrain launcher: what the desktop / Start menu icon runs.
+
+- If KastoBrain is already running, it just opens the app window.
+- Otherwise it starts the engine hidden (no black window), waits until it
+  is ready, then opens the app in its own window (Edge app mode).
+- The engine keeps running until the PC shuts down or you press Stop engine in the app.
+- Engine messages go to Logs\\engine.log (current) and engine.previous.log.
+"""
+
+import os
+import shutil
+import subprocess
+import sys
+import time
+import urllib.request
+import webbrowser
+from pathlib import Path
+
+PORT = 8765
+URL = f"http://127.0.0.1:{PORT}"
+APP = Path(__file__).resolve().parent
+ROOT = APP.parent
+
+
+def running():
+    try:
+        with urllib.request.urlopen(URL + "/api/projects", timeout=2) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def start_engine():
+    logs = ROOT / "Logs"
+    logs.mkdir(exist_ok=True)
+    log = logs / "engine.log"
+    if log.exists():                                   # keep exactly two generations
+        prev = logs / "engine.previous.log"
+        if prev.exists():
+            prev.unlink()
+        log.rename(prev)
+    python = Path(sys.executable)
+    if python.name.lower() == "pythonw.exe":           # engine needs python.exe; window stays hidden
+        python = python.with_name("python.exe")
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+    with open(log, "w", encoding="utf-8") as out:
+        subprocess.Popen([str(python), "-u", str(APP / "server.py"), str(ROOT), "--port", str(PORT)],  # -u: log written live
+                         cwd=str(APP), stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
+                         creationflags=flags, close_fds=True)
+
+
+def auto_update():
+    """Install newer program code from GitHub before the engine starts (brains are never touched)."""
+    import json
+    try:
+        s = json.loads((ROOT / "app-settings.json").read_text(encoding="utf-8"))
+    except Exception:
+        s = {}
+    if s.get("update_check") is False:
+        return
+    run = lambda *a: subprocess.run(["git", "-C", str(ROOT), *a], capture_output=True, text=True, timeout=120,
+                                    stdin=subprocess.DEVNULL, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    try:
+        branch = run("rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+        before = run("rev-parse", "HEAD").stdout.strip()
+        if run("fetch", "--quiet", "origin", branch).returncode or not run("log", "--oneline", "HEAD..FETCH_HEAD").stdout.strip():
+            return
+        if run("pull", "--ff-only", "origin", branch).returncode == 0:
+            (ROOT / "Logs").mkdir(exist_ok=True)
+            (ROOT / "Logs" / "update-previous-version.txt").write_text(before + "\n", encoding="utf-8")
+    except Exception:
+        pass                                            # no internet or no git: just start as is
+
+
+def open_window():
+    candidates = [shutil.which("msedge"),
+                  os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
+                  os.path.expandvars(r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"),
+                  shutil.which("chrome"),
+                  os.path.expandvars(r"%ProgramFiles%\Google\Chrome\Application\chrome.exe")]
+    for exe in candidates:
+        if exe and Path(exe).is_file():
+            subprocess.Popen([exe, f"--app={URL}", "--window-size=1400,900"],
+                             creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
+            return
+    webbrowser.open(URL)                               # fallback: normal browser tab
+
+
+def main():
+    if not (ROOT / "Projects").is_dir():
+        webbrowser.open("file:///" + str(ROOT / "README.md"))
+        return
+    if not running():
+        auto_update()
+        start_engine()
+        for _ in range(60):                            # wait up to 30 seconds
+            if running():
+                break
+            time.sleep(0.5)
+    open_window()
+
+
+if __name__ == "__main__":
+    main()

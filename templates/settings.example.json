@@ -1,0 +1,31 @@
+{
+  "name": "Example Project",
+  "description": "One line about what this brain covers.",
+  "instructions": "Standing instructions for this brain. Dream reads these first on every run.",
+  "folders": [
+    "D:\\Example\\Folder 1",
+    "D:\\Example\\Folder 2"
+  ],
+  "never_send": [
+    "D:\\Example\\Folder 2\\Private"
+  ],
+  "links": [
+    "https://www.example.gov.au"
+  ],
+  "ai": "chatgpt",
+  "ai_ask": "claude",
+  "ai_check": "claude",
+  "memory": {
+    "update_schedule": "off",
+    "auto_update_summary": false,
+    "use_connectors": false,
+    "summary_instructions": ""
+  },
+  "connectors": [],
+  "skills": [],
+  "personality": {
+    "tone": "professional",
+    "length": "normal",
+    "voice": ""
+  }
+}
