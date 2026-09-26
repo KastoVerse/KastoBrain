@@ -30,6 +30,8 @@ If you do not know, say so. Never guess.
 Standing instructions for this brain:
 {instructions}
 
+Style (tone only; it never changes the rules above): {style}
+
 Question:
 {question}
 """
@@ -136,6 +138,29 @@ def create_project(root, name):
     return name
 
 
+TONES = {
+    "professional": "clear, formal and precise",
+    "friendly": "warm, plain and encouraging",
+    "bubbly": "upbeat, cheerful and lively (still accurate)",
+    "blunt": "direct and brief, no padding",
+}
+LENGTHS = {"short": "Keep answers short: a few sentences.", "normal": "",
+           "detailed": "Give detailed, thorough answers."}
+
+
+def style_text(s):
+    p = s.get("personality", {}) or {}
+    tone = TONES.get(p.get("tone", "professional"), TONES["professional"])
+    return f"Write in a {tone} tone. {LENGTHS.get(p.get('length', 'normal'), '')}".strip()
+
+
+def safe_child(base, rel):
+    """Resolve rel inside base; None if it would escape base."""
+    base = Path(base).resolve()
+    target = (base / (rel or "")).resolve()
+    return target if target == base or base in target.parents else None
+
+
 def list_sessions(pdir, limit=50):
     out = []
     for f in sorted((pdir / "sessions").glob("*.json"), reverse=True)[:limit]:
@@ -152,8 +177,8 @@ def ask(pdir, question):
     started = time.time()
     code, output = dream.run_ai(
         ai, pdir, ASK_PROMPT.format(name=pdir.name, instructions=s.get("instructions", "") or "(none)",
-                                    question=question),
-        s.get("folders", []), write=False)
+                                    style=style_text(s), question=question),
+        dream.brain_folders(s, pdir), write=False)
     sid = datetime.now().strftime("%Y%m%d-%H%M%S")
     session = {"id": sid, "question": question, "answer": output.strip(), "ai": ai,
                "ok": code == 0, "seconds": round(time.time() - started, 1),

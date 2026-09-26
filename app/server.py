@@ -13,13 +13,15 @@ Usage:
 import argparse
 import os
 import json
+import tempfile
+import zipfile
 import subprocess
 import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 import brain
 import dream
@@ -33,7 +35,8 @@ LAST_PING = [time.time()]   # last time an open app window said "still here"
 CODE = Path(__file__).resolve().parent.parent   # the KastoBrain program folder (a git clone)
 ASKING = set()        # projects with a question being answered
 
-EDITABLE = {"description", "instructions", "links", "ai", "ai_ask", "ai_check", "memory", "never_send", "folders"}
+EDITABLE = {"description", "instructions", "links", "ai", "ai_ask", "ai_check", "memory", "never_send", "folders",
+            "personality"}
 
 
 def project_dir(name):
@@ -64,11 +67,13 @@ def start_build(name):
 def list_folder(pdir, folder):
     """Read-only listing of one folder inside this brain's folders. Never changes anything."""
     settings = json.loads((pdir / "settings.json").read_text(encoding="utf-8"))
-    roots = [Path(f) for f in settings.get("folders", [])]
+    (pdir / "Files").mkdir(exist_ok=True)
+    roots = [pdir / "Files"] + [Path(f) for f in settings.get("folders", [])]
     if not folder:
-        return {"path": "", "roots": True, "entries": [
-            {"name": str(r), "path": str(r), "dir": True, "exists": r.is_dir(),
-             "never_send": dream.under(r, settings.get("never_send", []))} for r in roots]}
+        return {"path": "", "roots": True, "own": str(pdir / "Files"), "entries": [
+            {"name": "This brain's files (uploads)" if i == 0 else str(r), "path": str(r), "dir": True,
+             "exists": r.is_dir(), "own": i == 0,
+             "never_send": dream.under(r, settings.get("never_send", []))} for i, r in enumerate(roots)]}
     target = Path(folder).resolve()
     if not any(target == r.resolve() or r.resolve() in target.parents for r in roots):
         return {"error": "outside this brain's folders"}
@@ -90,7 +95,18 @@ def list_folder(pdir, folder):
                         in_brain=dream.doc_key({"path": str(e), "size": st.st_size, "mtime": int(st.st_mtime)}) in seen)
         entries.append(item)
     parent = str(target.parent) if target not in [r.resolve() for r in roots] else ""
-    return {"path": str(target), "parent": parent, "entries": entries}
+    own = pdir / "Files"
+    in_own = target == own.resolve() or own.resolve() in target.parents
+    return {"path": str(target), "parent": parent, "entries": entries, "in_own": in_own,
+            "own_rel": str(target.relative_to(own.resolve())) if in_own else ""}
+
+
+def allowed_download(pdir, path):
+    """A file may be downloaded if it is in this brain's folder or one of its document folders."""
+    settings = brain.settings(pdir)
+    target = Path(path).resolve()
+    roots = [pdir.resolve()] + [Path(f).resolve() for f in settings.get("folders", [])]
+    return target.is_file() and any(target == r or r in target.parents for r in roots)
 
 
 def pending_runs(pdir):
@@ -136,7 +152,9 @@ def update_status():
     code, out = git("fetch", "--quiet", "origin", branch)
     if code:
         return {"available": False, "error": "could not reach GitHub", "detail": out[-300:]}
-    _, log = git("log", "--oneline", f"HEAD..origin/{branch}")
+    code, log = git("log", "--oneline", "HEAD..FETCH_HEAD")      # what GitHub has that this PC doesn't
+    if code:
+        return {"available": False, "error": "could not compare versions", "detail": log[-300:]}
     changes = [l for l in log.splitlines() if l.strip()]
     return {"available": bool(changes), "branch": branch, "changes": changes[:20]}
 
@@ -206,6 +224,17 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_file(self, path, name, ctype="application/octet-stream"):
+        size = Path(path).stat().st_size
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(size))
+        self.send_header("Content-Disposition", "attachment; filename*=UTF-8''" + quote(name))
+        self.end_headers()
+        with open(path, "rb") as f:
+            while chunk := f.read(1 << 20):
+                self.wfile.write(chunk)
+
     def do_GET(self):
         parts = urlsplit(self.path)
         query = parse_qs(parts.query)
@@ -246,6 +275,27 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"pages": wiki_pages(pdir)})
             if what == "sessions":
                 return self.send_json({"sessions": brain.list_sessions(pdir), "asking": name in ASKING})
+            if what == "download":
+                if "session" in query:
+                    f = pdir / "sessions" / (Path(query["session"][0]).name + ".json")
+                    if not f.is_file():
+                        return self.send_json({"error": "not found"}, 404)
+                    x = json.loads(f.read_text(encoding="utf-8"))
+                    md = f"# {x['question']}\n\n{x['answer']}\n\n_{x['time']} · {x['ai']}_\n"
+                    tmp = Path(tempfile.gettempdir()) / f"kb-{f.stem}.md"
+                    tmp.write_text(md, encoding="utf-8")
+                    return self.send_file(tmp, f"{pdir.name} - answer {f.stem}.md", "text/markdown")
+                target = query.get("path", [""])[0]
+                if not allowed_download(pdir, target):
+                    return self.send_json({"error": "not allowed"}, 403)
+                return self.send_file(target, Path(target).name)
+            if what == "export":
+                tmp = Path(tempfile.gettempdir()) / f"kastobrain-export-{pdir.name}.zip"
+                with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:
+                    for f in pdir.rglob("*"):
+                        if f.is_file():
+                            z.write(f, f"{pdir.name}/{f.relative_to(pdir)}")
+                return self.send_file(tmp, f"{pdir.name} brain.zip", "application/zip")
             if what == "files":
                 return self.send_json(list_folder(pdir, query.get("path", [""])[0]))
             if what == "pending":
@@ -286,6 +336,40 @@ class Handler(BaseHTTPRequestHandler):
                         SORTING.pop("log", None)
                 threading.Thread(target=work, daemon=True).start()
                 return self.send_json({"started": True})
+            if path.startswith("/api/project/") and (path.endswith("/upload") or path.endswith("/mkdir")):
+                name, what = path[len("/api/project/"):].rsplit("/", 1)
+                pdir = project_dir(name)
+                if not pdir:
+                    return self.send_json({"error": "brain not found"}, 404)
+                q = parse_qs(urlsplit(self.path).query)
+                files_root = pdir / "Files"
+                files_root.mkdir(exist_ok=True)
+                folder = brain.safe_child(files_root, q.get("dir", [""])[0])
+                fname = Path(q.get("name", [""])[0].replace("\\", "/")).name.strip()
+                if folder is None or not fname or fname in (".", ".."):
+                    return self.send_json({"error": "bad name or folder"}, 400)
+                if what == "mkdir":
+                    (folder / fname).mkdir(parents=True, exist_ok=True)
+                    return self.send_json({"created": str(folder / fname)})
+                # sub-folders inside an uploaded folder come through the name as a relative path
+                sub = brain.safe_child(folder, str(Path(q.get("rel", [""])[0]).parent)) if q.get("rel") else folder
+                if sub is None:
+                    return self.send_json({"error": "bad folder"}, 400)
+                sub.mkdir(parents=True, exist_ok=True)
+                target, n = sub / fname, 1
+                while target.exists():                   # never overwrite: add (2), (3) ...
+                    n += 1
+                    target = sub / f"{Path(fname).stem} ({n}){Path(fname).suffix}"
+                length = int(self.headers.get("Content-Length", 0))
+                with open(target, "wb") as out:
+                    left = length
+                    while left > 0:
+                        chunk = self.rfile.read(min(left, 1 << 20))
+                        if not chunk:
+                            break
+                        out.write(chunk)
+                        left -= len(chunk)
+                return self.send_json({"saved": str(target), "bytes": length})
             if path.startswith("/api/project/") and path.endswith("/ask"):
                 pdir = project_dir(path[len("/api/project/"):-len("/ask")])
                 question = read_body(self).get("question", "").strip()

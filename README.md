@@ -88,9 +88,18 @@ New versions only exist when you approve (merge) a change on GitHub.
 
 ### 4. Make your first brain
 
-1. Click **+ New brain** and give it a name.
-2. In **Settings → Context**, add a **folder** of documents (start small, about 5 files), any **Never send** folders, and your instructions.
+The app walks you through it on the welcome screen:
+1. Type a name and press **Create brain**.
+2. In the **Files** tab press **+ New → Upload files** (or Upload folder, or drag files in).
+   Files are **copied** into the brain; your originals are never changed.
 3. Press **Build Brain**. When it finishes, open **Brain → Pending approval** and Approve or Reject.
+
+Every tab has a **? Help** button explaining what it's for and what to do.
+
+**Also in the app:** 🎤 speak your questions (uses Edge/Windows speech recognition, which sends
+your voice to Microsoft to convert it to text), 🔊 read answers aloud, ⬇ download any file, page or
+answer, **⬇ Download brain (.zip)** for the whole brain, and **Settings → Personality** for tone,
+answer length and voice. Personality changes the style only, never the rules.
 
 ### 5. Make sure the AI command works
 

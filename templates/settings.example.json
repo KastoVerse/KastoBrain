@@ -22,5 +22,10 @@
     "summary_instructions": ""
   },
   "connectors": [],
-  "skills": []
+  "skills": [],
+  "personality": {
+    "tone": "professional",
+    "length": "normal",
+    "voice": ""
+  }
 }

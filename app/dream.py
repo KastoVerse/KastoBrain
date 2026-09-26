@@ -91,10 +91,16 @@ def under(path, folders):
                for f in folders)
 
 
-def scan_documents(settings):
+def brain_folders(settings, pdir=None):
+    """Folders a brain reads: its own uploaded Files folder plus any PC folders in settings."""
+    own = [str(pdir / "Files")] if pdir is not None and (pdir / "Files").is_dir() else []
+    return own + list(settings.get("folders", []))
+
+
+def scan_documents(settings, pdir=None):
     """List readable documents in the brain's folders, skipping never_send."""
     docs, missing = [], []
-    for folder in settings.get("folders", []):
+    for folder in brain_folders(settings, pdir):
         root = Path(folder)
         if not root.is_dir():
             missing.append(folder)
@@ -204,7 +210,7 @@ def build(root, name, log=print):
     rdir = pdir / "pending" / run
     log(f"=== Build Brain: {name}  run {run} ===")
 
-    docs, missing = scan_documents(settings)
+    docs, missing = scan_documents(settings, pdir)
     for m in missing:
         log(f"  folder not found, skipped: {m}")
     seen_file = pdir / "processed.json"
@@ -218,7 +224,7 @@ def build(root, name, log=print):
     log("  brief written, wiki copied to pending; starting Dream …")
 
     code, output = run_ai(settings.get("ai", "chatgpt"), rdir, DREAM_PROMPT.format(name=name),
-                          settings.get("folders", []) + [str(pdir / "sessions")])
+                          brain_folders(settings, pdir) + [str(pdir / "sessions")])
     (rdir / "dream-output.txt").write_text(output, encoding="utf-8")
 
     before, after = list_pages(wiki), list_pages(rdir / "wiki")
@@ -237,7 +243,7 @@ def build(root, name, log=print):
     touched = changes["added"] + changes["changed"]
     if changes["status"] == "pending" and touched:
         import verify
-        folders = settings.get("folders", [])
+        folders = brain_folders(settings, pdir)
         qc = verify.quote_check(rdir / "wiki", touched, folders)
         changes["quote_check"] = qc
         log(f"  Quote check (plain code): {qc['counts']}")
