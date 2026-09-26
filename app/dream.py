@@ -62,8 +62,12 @@ Follow these phases in order.
 4. UPDATE THE WIKI. Create or revise pages in ./wiki/Concepts, ./wiki/Entities
    or ./wiki/Workstreams using the page format in the brief. Reinforce what is
    still true, update what changed, mark stale facts as "(stale: reason)".
-   Every fact needs a citation: the FULL document path exactly as listed in the brief (with page if known) or a web
-   URL with the date checked. Link related pages with [[Page Title]].
+   Every fact needs a citation. For a document the footnote MUST be exactly:
+   [^n]: file: FULL PATH AS LISTED IN THE BRIEF — "exact words copied from the document"
+   Keep each footnote on ONE line. Copy the quoted words character for character (about 5 to 40 words) so they can be
+   checked automatically. Never paraphrase inside the quotes. For the web use:
+   [^n]: web: URL (checked YYYY-MM-DD)
+   Link related pages with [[Page Title]].
    Never re-create anything listed in the deletion log. If nothing needs to
    change, change nothing.
    Finally rewrite ./wiki/index.md: one line per page,
@@ -158,6 +162,8 @@ def run_ai(ai, workdir, prompt, folders, write=True):
         last = Path(tempfile.gettempdir()) / f"kastobrain-codex-{os.getpid()}-{time.time_ns()}.txt"
         cmd = ["codex", "exec", "--skip-git-repo-check", "--output-last-message", str(last),
                "--sandbox", "workspace-write" if write else "read-only", prompt]
+    elif ai == "grok":
+        cmd = ["grok", "-p", prompt]
     elif ai == "gemini":
         cmd = ["gemini", "-p", prompt, "--approval-mode", "auto_edit" if write else "default"]
         for f in folders:
@@ -228,6 +234,18 @@ def build(root, name, log=print):
     }
     if code == 0 and not (changes["added"] or changes["changed"] or changes["removed"]):
         changes["status"] = "no changes"
+    touched = changes["added"] + changes["changed"]
+    if changes["status"] == "pending" and touched:
+        import verify
+        folders = settings.get("folders", [])
+        qc = verify.quote_check(rdir / "wiki", touched, folders)
+        changes["quote_check"] = qc
+        log(f"  Quote check (plain code): {qc['counts']}")
+        checker = settings.get("ai_check", "")
+        if checker and checker != "none":
+            log(f"  Checker AI ({checker}) reviewing the changes …")
+            changes["checker"] = verify.checker_review(run_ai, checker, rdir, name, touched, qc, folders)
+            log(f"  Checker verdict: {changes['checker']['verdict']}")
     (rdir / "changes.json").write_text(json.dumps(changes, indent=2), encoding="utf-8")
     log(f"  Dream finished (exit {code}). Added {len(changes['added'])}, "
         f"changed {len(changes['changed'])}, removed {len(changes['removed'])}.")

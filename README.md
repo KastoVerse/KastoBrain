@@ -23,8 +23,20 @@ Only this code lives on GitHub. Your documents, brains, wiki and history stay on
 | **PC Brain** | Overview of every brain, search across all brains, and the **PC sorter (dry run only)**. |
 | **MCP connector** | Use your brains from **Codex, Claude Code and Gemini CLI**. |
 
-**AI used:** **ChatGPT / Codex by default.** Each brain can be switched to Claude Code or Gemini CLI
-in Settings → Context. It runs on the plans you already have. No API keys, no extra charges.
+**AI team (per brain, Settings → Context):** each job can use a different AI, on the plans you already have. No API keys, no extra charges.
+
+| Job | Default | Options |
+|---|---|---|
+| Build Brain | ChatGPT / Codex (careful, precise) | Codex, Claude Code, Gemini CLI, Grok Build |
+| Ask | Claude Code (clear answers) | same |
+| Checker | Claude Code | same, or Off |
+
+**Two checks on every Build Brain change, before you approve:**
+1. **Quote check (plain code, no AI).** Every document citation must carry the exact words it relies on.
+   KastoBrain opens the file and confirms the words are really there. Anything not found is flagged **NOT FOUND**.
+   Works for text, email, HTML and Word (.docx) files; PDFs too if `pypdf` is installed (`pip install pypdf`).
+2. **Checker AI.** A second, different AI reads the changed pages against their sources and gives a
+   verdict (**OK** or **ISSUES**) with a report. You see both in Brain → Pending approval.
 
 **Private folders:** list them under **Never send** in a brain's settings. They are left out of the document list the AI is given, and it is told never to open them.
 **Honest limit:** that is an instruction, not a lock. The AI can technically still see folders inside a brain's folders. For real protection, keep private files **outside** the folders you give a brain.
@@ -144,15 +156,19 @@ H:\KastoBrain\
 
 | Test | Claude Code | ChatGPT / Codex |
 |---|---|---|
-| Build Brain makes its own pages, cites sources, researches online | PASS | PASS (5 pages, afca.org.au cited, 75 s) |
+| Build Brain makes its own pages, cites sources, researches online | PASS | PASS |
 | Private "never send" folder not read | PASS | PASS |
 | Live wiki unchanged until approved; approve works | PASS | PASS |
-| Ask answers with sources; wiki and documents unchanged | PASS | PASS (clean final answer, about 27 s) |
+| Ask answers with sources; wiki and documents unchanged | PASS | PASS |
 | MCP connector used from the AI app | PASS | PASS |
+| Checker AI reviews a Codex build | PASS | (Codex was the builder) |
 
-Also tested: New Brain, cross-brain search, Files tab (refuses folders outside the brain),
-PC sorter dry run (nothing moved), and the app screens.
+**Lie test:** two false facts were planted in a page: one with a fake quote, one hidden behind a real
+quote. The quote check caught the fake quote (NOT FOUND); the checker AI caught **both**.
 
-**Not yet tested:** Gemini CLI (it refuses to sign in from a cloud machine; test it on your PC),
-the `.bat` files (Windows only), and real PDFs / Word files / scans.
+Also tested: quote check on text, curly quotes and Word files; New Brain; cross-brain search; Files tab;
+PC sorter dry run (nothing moved); the app screens.
+
+**Not yet tested:** Gemini CLI and Grok Build (they need signing in on your PC), the `.bat` files
+(Windows only), PDFs (need `pypdf`) and scanned images (cannot be quote-checked).
 Run the first brain on a small folder and check the Pending result before trusting it with more.

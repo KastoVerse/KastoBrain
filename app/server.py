@@ -29,7 +29,7 @@ ROOT = None
 RUNNING = {}          # project -> list of log lines while a build runs
 ASKING = set()        # projects with a question being answered
 
-EDITABLE = {"description", "instructions", "links", "ai", "memory", "never_send", "folders"}
+EDITABLE = {"description", "instructions", "links", "ai", "ai_ask", "ai_check", "memory", "never_send", "folders"}
 
 
 def project_dir(name):

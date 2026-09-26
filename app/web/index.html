@@ -290,14 +290,14 @@ function renderSettings(body) {
     <div class="section"><h3>Description</h3><input type="text" id="description" value="${esc(s.description)}"></div>
     <div class="section"><h3>Folders</h3><p class="hint">PC folders this brain reads (one per line). Read only.</p>
       <textarea id="folders">${esc(s.folders.join("\n"))}</textarea></div>
-    <div class="section"><h3>Never send</h3><p class="hint">Folders never sent to Claude or ChatGPT (one per line).</p>
+    <div class="section"><h3>Never send</h3><p class="hint">Folders never given to any AI (one per line).</p>
       <textarea id="never_send">${esc(s.never_send.join("\n"))}</textarea></div>
     <div class="section"><h3>Links</h3><p class="hint">Websites to prioritise when researching (one per line).</p>
       <textarea id="links">${esc(s.links.join("\n"))}</textarea></div>
-    <div class="section"><h3>AI</h3><select id="ai">
-      <option value="chatgpt" ${(s.ai || "chatgpt") === "chatgpt" ? "selected" : ""}>ChatGPT / Codex (default)</option>
-      <option value="claude" ${s.ai === "claude" ? "selected" : ""}>Claude Code</option>
-      <option value="gemini" ${s.ai === "gemini" ? "selected" : ""}>Gemini CLI</option></select></div>
+    <div class="section"><h3>AI team</h3><p class="hint">Each job can use a different AI. Runs on your own plans.</p>
+      ${aiSelect("ai", "AI for Build Brain", s.ai || "chatgpt", false)}
+      ${aiSelect("ai_ask", "AI for Ask", s.ai_ask || s.ai || "chatgpt", false)}
+      ${aiSelect("ai_check", "Checker AI (reviews every Build Brain change before you approve)", s.ai_check || "none", true)}</div>
     <button id="save">Save</button><span class="status" id="st"></span>`;
   if (state.sub === "Memory") {
     const m = s.memory;
@@ -323,6 +323,31 @@ function renderSettings(body) {
   if (save) save.onclick = saveSettings;
 }
 
+function aiSelect(id, label, value, allowNone) {
+  const opts = [["chatgpt", "ChatGPT / Codex"], ["claude", "Claude Code"], ["gemini", "Gemini CLI"], ["grok", "Grok Build"]];
+  if (allowNone) opts.push(["none", "Off"]);
+  return `<p class="hint" style="margin:10px 0 4px">${label}</p><select id="${id}">${opts.map(([v, t]) =>
+    `<option value="${v}" ${v === value ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+}
+
+function checksHtml(r) {
+  let h = "";
+  const q = r.quote_check;
+  if (q) {
+    const c = q.counts || {}, bad = q.problems.filter(p => p.status === "NOT FOUND").length;
+    h += `<div style="margin-top:6px"><b>Quote check</b> <span class="muted">(plain code, no AI)</span>:
+      <span class="badge ${bad ? "rejected" : "approved"}">${c.verified || 0} verified</span>
+      ${bad ? `<span class="badge rejected">${bad} NOT FOUND</span>` : ""}
+      <span class="muted">${Object.entries(c).filter(([k]) => !["verified", "NOT FOUND"].includes(k)).map(([k, v]) => `${v} ${esc(k)}`).join(" · ")}</span></div>`;
+    if (q.problems.length) h += `<ul>${q.problems.slice(0, 20).map(p => `<li>${esc(p.status)}: ${esc(p.page)} [^${esc(p.ref)}]${p.quote ? ` "${esc(p.quote)}"` : ""}</li>`).join("")}</ul>`;
+  }
+  const k = r.checker;
+  if (k) h += `<div style="margin-top:6px"><b>Checker</b> <span class="muted">(${esc(k.ai)})</span>:
+      <span class="badge ${k.verdict === "OK" ? "approved" : k.verdict === "ISSUES" ? "rejected" : "pending"}">${esc(k.verdict)}</span>
+      <details><summary class="muted" style="cursor:pointer">Read the checker's report</summary><pre class="page">${esc(k.report)}</pre></details></div>`;
+  return h;
+}
+
 async function saveSettings() {
   const lines = id => document.getElementById(id).value.split("\n").map(x => x.trim()).filter(Boolean);
   let changes;
@@ -330,7 +355,8 @@ async function saveSettings() {
     instructions: document.getElementById("instructions").value,
     description: document.getElementById("description").value,
     folders: lines("folders"), never_send: lines("never_send"), links: lines("links"),
-    ai: document.getElementById("ai").value };
+    ai: document.getElementById("ai").value, ai_ask: document.getElementById("ai_ask").value,
+    ai_check: document.getElementById("ai_check").value };
   else changes = { memory: {
     update_schedule: document.getElementById("update_schedule").value,
     use_connectors: document.getElementById("use_connectors").checked,
@@ -549,6 +575,7 @@ async function renderBrain(body) {
     panel = `<h3>Pending approval</h3><p class="hint">Nothing reaches the wiki until you approve it.</p>` +
       (pd.runs.length ? pd.runs.map(r => `<div class="run"><b>Run ${esc(r.run)}</b> <span class="badge ${esc(r.status.replace(" ",""))}">${esc(r.status)}</span> <span class="muted">· ${esc(r.ai)} · ${r.new_or_changed} new/changed of ${r.documents} documents</span>
         <ul><li>Added: ${r.added.map(esc).join(", ") || "none"}</li><li>Changed: ${r.changed.map(esc).join(", ") || "none"}</li><li>Removed: ${r.removed.map(esc).join(", ") || "none"}</li></ul>
+        ${checksHtml(r)}
         ${r.status === "pending" ? `<button data-a="approve" data-r="${esc(r.run)}">Approve</button> <button data-a="reject" data-r="${esc(r.run)}">Reject</button>` : ""}</div>`).join("")
       : `<div class="placeholder">No runs yet. Press Build Brain.</div>`);
   } else if (state.brainView.startsWith("page:")) {

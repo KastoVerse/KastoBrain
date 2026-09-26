@@ -148,7 +148,7 @@ def list_sessions(pdir, limit=50):
 
 def ask(pdir, question):
     s = settings(pdir)
-    ai = s.get("ai", "chatgpt")
+    ai = s.get("ai_ask") or s.get("ai", "chatgpt")
     started = time.time()
     code, output = dream.run_ai(
         ai, pdir, ASK_PROMPT.format(name=pdir.name, instructions=s.get("instructions", "") or "(none)",

@@ -13,6 +13,8 @@
     "https://www.example.gov.au"
   ],
   "ai": "chatgpt",
+  "ai_ask": "claude",
+  "ai_check": "claude",
   "memory": {
     "update_schedule": "off",
     "auto_update_summary": false,

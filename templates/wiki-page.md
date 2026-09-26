@@ -21,5 +21,5 @@ Plain-language facts about this subject. Every fact ends with a citation.
 
 ## Sources
 
-[^1]: file: D:\Example\Folder 1\letter.pdf (page 2)
+[^1]: file: D:\Example\Folder 1\letter.txt — "exact words copied from the document"
 [^2]: web: https://www.example.gov.au/page (checked 2026-01-01)
