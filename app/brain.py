@@ -196,16 +196,38 @@ Task:
 """
 
 
+def ai_missing(ai):
+    """Plain message if the chosen AI's command isn't on this PC, else ''."""
+    import os
+    import shutil
+    import appconf
+    if os.environ.get("KASTOBRAIN_TEST_AI"):
+        return ""
+    info = appconf.AIS.get(ai)
+    if not info:
+        return f"Unknown AI '{ai}'. Pick one in this brain's Settings → Context."
+    if shutil.which(info["cmd"]):
+        return ""
+    return (f"{info['label']} is not installed on this PC, so nothing was run. "
+            f"Either pick an installed AI in this brain's Settings → Context, "
+            f"or set up {info['label']} (Connectors → How to set it up).")
+
+
 def run_skill(pdir, skill):
     """Run a skill read-only and save the result as a report (brain reports/ and the Downloads folder)."""
     import appconf
     s = settings(pdir)
     app = app_defaults(pdir)
     ai = s.get("ai_ask") or s.get("ai", "chatgpt")
+    missing = ai_missing(ai)
+    if missing:
+        raise ValueError(missing)
     started = time.time()
     code, out = dream.run_ai(ai, pdir, SKILL_PROMPT.format(agent=app["agent_name"], skill=skill["name"], name=pdir.name,
                                                            style=style_text(s, pdir), task=skill["prompt"]),
                              dream.brain_folders(s, pdir), write=False, mcp=brain_mcp(pdir, s))
+    if code != 0:                                        # a failed run is never saved as a report
+        raise ValueError(f"{ai} did not finish (code {code}): {out.strip()[-300:]}")
     stamp = datetime.now().strftime("%Y-%m-%d %H%M")
     text = f"# {skill['name']} — {pdir.name}\n\n_{stamp} · {ai} · {round(time.time() - started)}s_\n\n{out.strip()}\n"
     (pdir / "reports").mkdir(exist_ok=True)
@@ -235,6 +257,9 @@ def list_sessions(pdir, limit=50):
 def ask(pdir, question):
     s = settings(pdir)
     ai = s.get("ai_ask") or s.get("ai", "chatgpt")
+    missing = ai_missing(ai)
+    if missing:
+        raise ValueError(missing)
     app = app_defaults(pdir)
     started = time.time()
     code, output = dream.run_ai(

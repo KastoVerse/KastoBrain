@@ -615,7 +615,8 @@ async function saveSettings() {
 
 // ---------- Build Brain ----------
 async function startBuild() {
-  await fetch(`${P()}/build`, { method: "POST" });
+  const r = await fetch(`${P()}/build`, { method: "POST" }).then(r => r.json()).catch(() => ({}));
+  if (r.error) return alert(r.error);
   pollBuild();
 }
 
@@ -984,7 +985,8 @@ async function fillBrainSkills() {
     <h3>Reports for this brain</h3>${rp.reports.length ? `<table class="files">${rp.reports.map(r => `<tr><td>${esc(r.name)}</td>
       <td style="width:40px"><a href="${P()}/download?path=${encodeURIComponent(r.path)}" download title="Download">⬇</a></td></tr>`).join("")}</table>` : '<div class="placeholder">No reports yet.</div>'}`;
   box.querySelectorAll("[data-srun]").forEach(b => b.onclick = async () => {
-    await fetch(`${P()}/skill/${encodeURIComponent(b.dataset.srun)}`, { method: "POST" }); fillBrainSkills(); refreshFoot();
+    const r = await fetch(`${P()}/skill/${encodeURIComponent(b.dataset.srun)}`, { method: "POST" }).then(r => r.json()).catch(() => ({}));
+    if (r.error) alert(r.error); fillBrainSkills(); refreshFoot();
   });
   if (rp.running) setTimeout(() => { if (state.sub === "Skills" && document.getElementById("brainSkills")) fillBrainSkills(); }, 5000);
 }

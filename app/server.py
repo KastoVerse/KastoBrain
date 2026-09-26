@@ -171,6 +171,10 @@ def start_skill(name, skill_id):
     sk = next((k for k in appconf.list_skills(ROOT) if k.get("id") == skill_id), None)
     if not sk:
         raise ValueError("skill not found")
+    s = brain.settings(project_dir(name))
+    missing = brain.ai_missing(s.get("ai_ask") or s.get("ai", "chatgpt"))
+    if missing:
+        raise ValueError(missing)
     SKILLS_RUNNING[name] = sk["name"]
 
     def work():
@@ -627,6 +631,9 @@ class Handler(BaseHTTPRequestHandler):
             if not pdir:
                 return self.send_json({"error": "project not found"}, 404)
             if parts[1] == "build":
+                missing = brain.ai_missing(brain.settings(pdir).get("ai", "chatgpt"))
+                if missing:
+                    return self.send_json({"error": missing}, 400)
                 return self.send_json({"started": start_build(pdir.name)})
             if len(parts) != 3 or not (pdir / "pending" / parts[2] / "changes.json").is_file():
                 return self.send_json({"error": "run not found"}, 404)
