@@ -16,7 +16,7 @@ import setup_layout
 
 NAME_OK = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _\-&().,']{0,60}$")
 
-ASK_PROMPT = """You answer questions from the KastoBrain project brain "{name}".
+ASK_PROMPT = """You are {agent}, answering questions from the KastoBrain project brain "{name}".
 You are READ-ONLY: never create, change, move or delete any file.
 
 How to answer (Perplexity's Brain method):
@@ -122,6 +122,19 @@ def pending_runs(pdir):
 
 
 def create_project(root, name):
+    """Make a new brain; it starts with the app-wide defaults (AI team, personality)."""
+    made = _create_project(root, name)
+    import appconf
+    app = appconf.load_settings(root)
+    p = projects_root(root) / made / "settings.json"
+    s = json.loads(p.read_text(encoding="utf-8"))
+    s.update(ai=app["ai"], ai_ask=app["ai_ask"], ai_check=app["ai_check"], personality=dict(app["personality"]))
+    p.write_text(json.dumps(s, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    (projects_root(root) / made / "Files").mkdir(exist_ok=True)
+    return made
+
+
+def _create_project(root, name):
     name = (name or "").strip()
     if not NAME_OK.match(name) or ".." in name:
         raise ValueError("Use letters, numbers, spaces and - _ & ( ) only (max 60).")
@@ -148,8 +161,13 @@ LENGTHS = {"short": "Keep answers short: a few sentences.", "normal": "",
            "detailed": "Give detailed, thorough answers."}
 
 
-def style_text(s):
-    p = s.get("personality", {}) or {}
+def app_defaults(pdir):
+    import appconf
+    return appconf.load_settings(Path(pdir).parent.parent)
+
+
+def style_text(s, pdir=None):
+    p = s.get("personality") or (app_defaults(pdir)["personality"] if pdir else {})
     tone = TONES.get(p.get("tone", "professional"), TONES["professional"])
     return f"Write in a {tone} tone. {LENGTHS.get(p.get('length', 'normal'), '')}".strip()
 
@@ -159,6 +177,49 @@ def safe_child(base, rel):
     base = Path(base).resolve()
     target = (base / (rel or "")).resolve()
     return target if target == base or base in target.parents else None
+
+
+def brain_mcp(pdir, s):
+    """Custom MCP connectors switched on for this brain."""
+    wanted = set(s.get("connectors") or [])
+    return [m for m in app_defaults(pdir).get("mcp_connectors", []) if m.get("name") in wanted]
+
+
+SKILL_PROMPT = """You are {agent}, running the skill "{skill}" on the KastoBrain brain "{name}".
+You are READ-ONLY: never create, change, move or delete any file.
+Use ./wiki (start with ./wiki/index.md) and the original documents it cites.
+Cite every fact: [page: Title], [file: full path] or [web: URL]. Never guess; say what is missing.
+Style: {style}
+
+Task:
+{task}
+"""
+
+
+def run_skill(pdir, skill):
+    """Run a skill read-only and save the result as a report (brain reports/ and the Downloads folder)."""
+    import appconf
+    s = settings(pdir)
+    app = app_defaults(pdir)
+    ai = s.get("ai_ask") or s.get("ai", "chatgpt")
+    started = time.time()
+    code, out = dream.run_ai(ai, pdir, SKILL_PROMPT.format(agent=app["agent_name"], skill=skill["name"], name=pdir.name,
+                                                           style=style_text(s, pdir), task=skill["prompt"]),
+                             dream.brain_folders(s, pdir), write=False, mcp=brain_mcp(pdir, s))
+    stamp = datetime.now().strftime("%Y-%m-%d %H%M")
+    text = f"# {skill['name']} — {pdir.name}\n\n_{stamp} · {ai} · {round(time.time() - started)}s_\n\n{out.strip()}\n"
+    (pdir / "reports").mkdir(exist_ok=True)
+    rep = pdir / "reports" / f"{stamp} - {skill['id']}.md"
+    rep.write_text(text, encoding="utf-8")
+    dl = appconf.downloads_dir(pdir.parent.parent) / f"{pdir.name} - {skill['name']} - {stamp}.md"
+    dl.write_text(text, encoding="utf-8")
+    return {"ok": code == 0, "report": str(rep), "download": str(dl), "text": text}
+
+
+def list_reports(pdir):
+    d = pdir / "reports"
+    return [{"name": f.name, "path": str(f), "mtime": int(f.stat().st_mtime)}
+            for f in sorted(d.glob("*.md"), reverse=True)] if d.is_dir() else []
 
 
 def list_sessions(pdir, limit=50):
@@ -174,11 +235,13 @@ def list_sessions(pdir, limit=50):
 def ask(pdir, question):
     s = settings(pdir)
     ai = s.get("ai_ask") or s.get("ai", "chatgpt")
+    app = app_defaults(pdir)
     started = time.time()
     code, output = dream.run_ai(
-        ai, pdir, ASK_PROMPT.format(name=pdir.name, instructions=s.get("instructions", "") or "(none)",
-                                    style=style_text(s), question=question),
-        dream.brain_folders(s, pdir), write=False)
+        ai, pdir, ASK_PROMPT.format(agent=app["agent_name"], name=pdir.name,
+                                    instructions=s.get("instructions", "") or "(none)",
+                                    style=style_text(s, pdir), question=question),
+        dream.brain_folders(s, pdir), write=False, mcp=brain_mcp(pdir, s))
     sid = datetime.now().strftime("%Y%m%d-%H%M%S")
     session = {"id": sid, "question": question, "answer": output.strip(), "ai": ai,
                "ok": code == 0, "seconds": round(time.time() - started, 1),

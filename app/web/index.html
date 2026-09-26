@@ -68,7 +68,7 @@
   .badge.nochanges { color:var(--dim); border:1px solid var(--line); }
   pre.page { white-space:pre-wrap; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; font:12px/1.5 ui-monospace, Consolas, monospace; }
   .build { margin-left:auto; background:var(--metal-gold); background-size:200% 200%; color:#1a1408; border:none; font-weight:700; padding:8px 16px; box-shadow:0 0 18px rgba(194,163,106,.25); transition:background-position .6s; }
-  .build:hover { background-position:100% 100%; background-color:transparent; }
+  .build:hover, button.build:hover { background:var(--metal-gold); background-size:200% 200%; background-position:100% 100%; color:#1a1408; border:none; }
   .btnlink { display:inline-block; background:var(--panel); color:var(--silver-hi); border:1px solid var(--silver-dk); border-radius:6px; padding:6px 12px; text-decoration:none; font-size:14px; }
   .btnlink:hover { border-color:var(--silver); background:#2e2b38; }
   .m .btnlink { padding:2px 8px; font-size:12px; }
@@ -133,25 +133,67 @@
   @media (max-width:760px) { body { flex-direction:column; } aside { width:auto; min-height:0; } .body { flex-direction:column; } .sub { width:auto; } main { padding:16px; } }
 </style>
 </head>
+<style>
+  aside { display:flex; flex-direction:column; }
+  aside .grow { flex:1; }
+  .nav .i { display:inline-block; width:22px; }
+  .foot { border-top:1px solid var(--line); margin-top:10px; padding-top:8px; font-size:11px; color:var(--dim); line-height:1.6; }
+  .foot b { color:var(--silver); font-weight:500; }
+  .bell { float:right; cursor:pointer; }
+  .bell .n { background:var(--purple); color:#fff; border-radius:9px; padding:0 6px; font-size:10px; margin-left:3px; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; margin:14px 0; }
+  .tile { border-radius:12px; padding:16px; cursor:pointer; border:1px solid transparent; transition:transform .15s, box-shadow .15s; min-height:108px; }
+  .tile:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,.35); }
+  .tile .ti { font-size:28px; }
+  .tile b { display:block; font-size:15px; margin-top:6px; }
+  .tile small { opacity:.85; font-size:12px; }
+  .t-gold { background:linear-gradient(135deg,#7a5a18,#c2a36a 55%,#e8d9b5); color:#1a1408; }
+  .t-silver { background:linear-gradient(135deg,#5E6268,#C0C4C8 55%,#F4F6F8); color:#111; }
+  .t-purple { background:linear-gradient(135deg,#2e1446,#5e2b8a 60%,#7d45b0); color:#f1e8fa; }
+  .t-violet { background:linear-gradient(135deg,#5e2b8a,#9b6fc9 60%,#cdb3ea); color:#1c0e2a; }
+  .drop { border:2px dashed var(--line); border-radius:12px; padding:26px; text-align:center; color:var(--dim); margin-bottom:14px; }
+  .drop.on { border-color:var(--gold); color:var(--gold); background:rgba(194,163,106,.06); }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-bottom:16px; }
+  .stat { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  .stat .v { font-size:22px; font-weight:700; }
+  .stat .k { font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.04em; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; margin:10px 0 22px; }
+  .gcard { background:linear-gradient(180deg,#2a2833,#232129); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .gcard h4 { margin:0 0 4px; font-size:14px; }
+  .gcard p { color:var(--dim); font-size:12px; margin:0 0 10px; }
+  .pill { font-size:11px; padding:1px 8px; border-radius:9px; border:1px solid var(--line); color:var(--dim); margin-right:4px; }
+  .pill.ok { color:#1a1408; background:var(--metal-gold); border:none; }
+  .pill.no { color:#e9d6de; background:var(--plum); border:none; }
+  .files td .desc { display:block; color:var(--dim); font-size:11px; }
+  .files td .orig { color:var(--dim); font-size:10px; }
+  .page-title { display:flex; align-items:center; gap:12px; margin:8px 0 18px; font-size:20px; }
+  .names li { margin-bottom:4px; }
+  code.cp { display:block; white-space:pre-wrap; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px; font-size:12px; }
+</style>
+</head>
 <body>
 <aside>
   <div class="logo">KastoBrain<span class="sparkle" style="left:-4px;top:2px"></span><span class="sparkle" style="right:-6px;top:-2px;animation-delay:1.1s"></span><span class="sparkle" style="left:48%;bottom:-3px;animation-delay:2s"></span></div>
-  <h4>PC Brain</h4>
-  <a class="nav" id="pcNav">PC Brain</a>
-  <h4>Projects</h4>
+  <a class="nav" data-page="pc" style="margin-top:14px"><span class="i">🧠</span>PC Brain</a>
+  <h4>Brains</h4>
   <div id="projects"></div>
-  <a class="nav" id="newBrain" style="color:var(--gold)" title="Create a new brain">＋ New brain</a>
-  <h4>Sessions</h4>
-  <div id="sessNav"><div class="nav muted">None yet</div></div>
+  <a class="nav" id="newBrain" style="color:var(--gold)" title="Create a new brain"><span class="i">＋</span>New brain</a>
+  <h4>Tools</h4>
+  <a class="nav" data-page="skills"><span class="i">🧩</span>Skills</a>
+  <a class="nav" data-page="workflows"><span class="i">🔁</span>Workflows</a>
+  <a class="nav" data-page="connectors"><span class="i">🔌</span>Connectors</a>
+  <a class="nav" data-page="downloads"><span class="i">⬇</span>Downloads</a>
+  <div class="grow"></div>
+  <a class="nav" data-page="settings"><span class="i">⚙</span>Settings</a>
+  <div class="foot" id="foot">Starting…</div>
 </aside>
 <div style="flex:1;display:flex;flex-direction:column;min-width:0">
 <div id="updBar" style="display:none;padding:8px 18px;background:rgba(94,43,138,.92);border-bottom:1px solid var(--gold);font-size:13px"></div>
 <main id="main"><div class="muted">Loading…</div></main>
 </div>
-
 <script>
 const TABS = ["Overview", "Files", "Brain", "Settings"];
-const SUBS = ["Context", "Personality", "Memory", "Apps", "Connectors", "Skills"];
+const SUBS = ["Context", "Personality", "Memory", "Connectors", "Skills"];
 let state = { project: null, settings: null, tab: "Overview", sub: "Context", view: "project",
               filesPath: "", brainView: "All", root: "", help: false };
 
@@ -166,14 +208,14 @@ const HELP = {
   Overview: `<b>Overview: ask your brain questions.</b><br>Type (or press 🎤 and speak) a question and press <b>Ask</b>.
     The answer comes from this brain's wiki, with sources. Asking never changes anything.
     Every answer is kept below; you can read it aloud (🔊) or download it (⬇).`,
-  Files: `<b>Files: the documents this brain learns from.</b><br>Press <b>+ New</b> to upload files or a whole folder,
+  Files: `<b>Files: the documents this brain learns from.</b><br>Use the coloured tiles to <b>upload files</b>, a whole <b>folder</b> or a <b>zip</b>,
     or drag files onto this page. Uploads are copied into this brain; your originals stay where they are.
-    Then press <b>Build Brain</b> (top right).`,
+    Then press <b>Build Brain</b> (top right). Build Brain also reads each document and gives it a proper name and description; the renames happen when you approve.`,
   Brain: `<b>Brain: what KastoBrain has learned.</b><br>After <b>Build Brain</b>, it writes pages by itself:
     <b>Concepts</b> (ideas, issues), <b>Entities</b> (people, companies) and <b>Workstreams</b> (claims, jobs).
     New pages wait in <b>Pending approval</b> until you press Approve. Click any page or globe dot to open it.`,
   Settings: `<b>Settings: how this brain works.</b><br><b>Context</b>: instructions, extra PC folders, private folders, which AI does which job.
-    <b>Personality</b>: tone, answer length and read-aloud voice. <b>Memory</b>: automatic updates. Press <b>Save</b> after changes.`,
+    <b>Personality</b>: tone, answer length and read-aloud voice. <b>Memory</b>: automatic updates. <b>Connectors</b>: extra tools this brain may use. <b>Skills</b>: run ready-made jobs. Press <b>Save</b> after changes.`,
 };
 
 // ---------- sidebar & start ----------
@@ -185,7 +227,7 @@ async function loadProjects() {
     || '<div class="nav muted" style="font-size:12px">No brains yet</div>';
   box.querySelectorAll("[data-p]").forEach(a => a.onclick = () => { state.filesPath = ""; state.brainView = "All"; openProject(a.dataset.p); });
   if (!r.projects.length) return renderWelcome();
-  if (state.view === "pc") return renderPC();
+  if (PAGES[state.view]) return PAGES[state.view]();
   openProject(r.projects.includes(state.project) ? state.project : r.projects[0]);
 }
 
@@ -198,7 +240,13 @@ async function createBrain(name) {
 }
 
 document.getElementById("newBrain").onclick = () => createBrain(prompt("Name for the new brain (for example: Insurance):"));
-document.getElementById("pcNav").onclick = () => renderPC();
+const PAGES = { pc: () => renderPC(), skills: () => renderSkillsPage(), workflows: () => renderWorkflows(),
+  connectors: () => renderConnectors(), downloads: () => renderDownloads(), settings: () => renderAppSettings() };
+document.querySelectorAll("aside [data-page]").forEach(a => a.onclick = () => { state.view = a.dataset.page; PAGES[a.dataset.page](); });
+function setNav() {
+  document.querySelectorAll("aside [data-page]").forEach(a => a.classList.toggle("on", a.dataset.page === state.view));
+  document.querySelectorAll("[data-p]").forEach(a => a.classList.toggle("on", state.view === "project" && a.dataset.p === state.project));
+}
 
 function renderWelcome() {
   document.getElementById("main").innerHTML = `
@@ -209,7 +257,7 @@ function renderWelcome() {
       <h3 class="metal" style="margin-top:30px">Get started in 4 steps</h3>
       <div class="run"><b>① Create a brain</b><div class="muted">One brain per topic, for example "Insurance" or "House".</div>
         <div class="ask" style="margin:10px 0 0"><input type="text" id="wName" placeholder="Type a name, then press Create brain"><button class="build" id="wGo" style="margin:0">Create brain</button></div></div>
-      <div class="run"><b>② Add your documents</b><div class="muted">In the <b>Files</b> tab press <b>+ New → Upload files</b>, or drag files in. Your originals are never changed.</div></div>
+      <div class="run"><b>② Add your documents</b><div class="muted">In the <b>Files</b> tab press <b>Upload files</b>, <b>Upload folder</b> or <b>Upload zip</b>, or drag files in. Your originals are never changed.</div></div>
       <div class="run"><b>③ Press Build Brain</b><div class="muted">The AI reads everything, researches online, and writes the pages itself.</div></div>
       <div class="run"><b>④ Approve</b><div class="muted">Check the changes in <b>Brain → Pending approval</b>. Nothing goes in until you press Approve.</div></div>
     </div>`;
@@ -221,9 +269,7 @@ function renderWelcome() {
 async function openProject(name) {
   const r = await getJSON(`/api/project/${encodeURIComponent(name)}`);
   state.project = r.name; state.settings = r.settings; state.view = "project";
-  document.getElementById("pcNav").classList.remove("on");
-  document.querySelectorAll("[data-p]").forEach(a => a.classList.toggle("on", a.dataset.p === name));
-  render(); loadSessNav();
+  setNav(); render();
 }
 
 function render() {
@@ -265,7 +311,7 @@ async function renderOverview(body) {
     const st = document.getElementById("askSt"); st.className = "status building"; st.textContent = "Thinking… (this can take a minute or two)";
     const r = await postJSON(`${P()}/ask`, { question: q });
     if (r.error) { st.className = "status"; st.textContent = r.error; return; }
-    render(); loadSessNav();
+    render();
   };
   document.getElementById("micBtn").onclick = () => listen(document.getElementById("q"), document.getElementById("micBtn"));
   body.querySelectorAll("[data-say]").forEach(b => b.onclick = () => {
@@ -294,53 +340,53 @@ function speak(text) {
   speechSynthesis.speak(u);
 }
 
-async function loadSessNav() {
-  if (!state.project) return;
-  const d = await getJSON(`${P()}/sessions`);
-  document.getElementById("sessNav").innerHTML = d.sessions.slice(0, 12).map(x =>
-    `<a class="nav" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" data-sess>${esc(x.question)}</a>`).join("")
-    || '<div class="nav muted" style="font-size:12px">No questions yet</div>';
-  document.querySelectorAll("[data-sess]").forEach(a => a.onclick = () => { state.tab = "Overview"; render(); });
-}
+
 
 // ---------- Files: + New (upload files / folder, new folder), drag & drop, download ----------
 async function renderFiles(body) {
-  const d = await getJSON(`${P()}/files?path=${encodeURIComponent(state.filesPath)}`);
+  const [d, sum] = await Promise.all([getJSON(`${P()}/files?path=${encodeURIComponent(state.filesPath)}`), getJSON(`${P()}/summary`)]);
   if (d.error) { state.filesPath = ""; return renderFiles(body); }
-  const size = n => n < 1024 ? n + " B" : n < 1048576 ? (n / 1024).toFixed(0) + " KB" : (n / 1048576).toFixed(1) + " MB";
+  const size = n => n < 1024 ? n + " B" : n < 1048576 ? (n / 1024).toFixed(0) + " KB" : n < 1073741824 ? (n / 1048576).toFixed(1) + " MB" : (n / 1073741824).toFixed(2) + " GB";
   const date = t => new Date(t * 1000).toLocaleDateString();
-  const uploadHere = d.roots ? "" : (d.in_own ? d.own_rel : null);   // null = not an upload folder
+  const uploadHere = d.roots ? "" : (d.in_own ? d.own_rel : null);
   const rows = d.entries.map(e => `<tr class="${e.dir ? "dir" : ""}">
-      <td ${e.dir && e.exists !== false ? `data-go="${esc(e.path)}"` : ""}><span class="ico">${e.dir ? (e.own ? "★" : "▸") : "·"}</span>${esc(e.name)}
+      <td ${e.dir && e.exists !== false ? `data-go="${esc(e.path)}"` : ""}><span class="ico">${e.dir ? (e.own ? "★" : "▸") : "·"}</span>${esc(e.title || e.name)}
         ${e.exists === false ? '<span class="tag skip">not found</span>' : ""}
         ${e.never_send ? '<span class="tag never">never send</span>' : ""}
-        ${e.in_brain ? '<span class="tag inbrain">in brain</span>' : ""}
-        ${!e.dir && !e.readable ? '<span class="tag skip">not read</span>' : ""}</td>
+        ${e.in_brain ? '<span class="tag inbrain">in brain</span>' : (!e.dir && e.readable ? '<span class="tag skip">new</span>' : "")}
+        ${!e.dir && !e.readable ? '<span class="tag skip">not read</span>' : ""}
+        ${e.description ? `<span class="desc">${esc(e.description)}</span>` : ""}
+        ${e.title && e.title + "" !== e.name.replace(/\.[^.]+$/, "") ? `<span class="orig">file: ${esc(e.name)}${e.original && e.original !== e.name ? ` · was: ${esc(e.original)}` : ""}</span>` : ""}</td>
       <td class="dt">${e.mtime ? date(e.mtime) : ""}</td><td class="sz">${e.size != null ? size(e.size) : ""}</td>
       <td style="width:40px">${e.dir ? "" : `<a href="${P()}/download?path=${encodeURIComponent(e.path)}" title="Download this file" download>⬇</a>`}</td></tr>`).join("");
   const crumbs = d.roots ? "All folders of this brain" :
     `<a data-go="">All folders</a> › ${d.parent ? `<a data-go="${esc(d.parent)}">up</a> › ` : ""}${esc(d.path)}`;
   body.innerHTML = `<div class="body"><div class="panel" style="max-width:none" id="dropZone">
-    <div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0">Files</h3>
-      <div style="margin-left:auto;position:relative">
-        <button class="build" id="newBtn" style="margin:0" title="Add documents to this brain">+ New</button>
-        <div id="newMenu" class="run" style="display:none;position:absolute;right:0;top:38px;z-index:4;width:210px;padding:6px">
-          <div class="nav" id="upFiles">📄 Upload files</div><div class="nav" id="upFolder">📁 Upload folder</div><div class="nav" id="mkFolder">➕ New folder</div></div>
-      </div></div>
-    <p class="hint" style="margin-top:6px">Press <b>+ New</b> or drag files onto this page to add them to this brain. Uploads are <b>copied</b> in; your originals are never changed.
-      ${uploadHere === null ? " <b>You're viewing a linked PC folder</b>: uploads go to <i>This brain's files</i>." : ""}
-      After adding files, press <b>Build Brain</b>.</p>
+    <div class="stats">
+      <div class="stat"><div class="v metal">${sum.documents}</div><div class="k">Documents</div></div>
+      <div class="stat"><div class="v">${sum.in_brain}</div><div class="k">Already in the brain</div></div>
+      <div class="stat"><div class="v" style="color:var(--violet)">${sum.new}</div><div class="k">New since last build</div></div>
+      <div class="stat"><div class="v">${size(sum.bytes)}</div><div class="k">Total size</div></div>
+      <div class="stat"><div class="v">${sum.pending}</div><div class="k">Waiting for approval</div></div>
+    </div>
+    <div class="tiles">
+      <div class="tile t-gold" id="upFiles"><div class="ti">📄</div><b>Upload files</b><small>Pick one or more documents from your PC.</small></div>
+      <div class="tile t-silver" id="upFolder"><div class="ti">📁</div><b>Upload folder</b><small>A whole folder, sub-folders included.</small></div>
+      <div class="tile t-purple" id="upZip"><div class="ti">🗜</div><b>Upload zip</b><small>A zip file is unpacked into this brain.</small></div>
+      <div class="tile t-violet" id="mkFolder"><div class="ti">➕</div><b>New folder</b><small>Organise: 01 Emails, 02 Letters…</small></div>
+    </div>
+    <div class="drop" id="dropHint">⬇ Drag files here to add them. Uploads are <b>copied</b> in; your originals are never changed.
+      ${uploadHere === null ? "<br>You're viewing a linked PC folder, so uploads go to <b>This brain's files</b>." : ""}</div>
+    <div class="status" id="upSt">${sum.new ? `${sum.new} new document(s). Press <b>Build Brain</b> to read them; it also names each one by what it is.` : ""}</div>
     <div class="crumbs">${crumbs}</div>
-    <div class="status" id="upSt"></div>
-    ${d.entries.length ? `<table class="files">${rows}</table>` : `<div class="placeholder">This folder is empty. Press <b>+ New → Upload files</b>, or drag files here.</div>`}
+    ${d.entries.length ? `<table class="files">${rows}</table>` : `<div class="placeholder">This folder is empty. Use the tiles above, or drag files here.</div>`}
     <input type="file" id="pickFiles" multiple style="display:none"><input type="file" id="pickFolder" webkitdirectory multiple style="display:none">
+    <input type="file" id="pickZip" accept=".zip" style="display:none">
   </div></div>`;
   const dir = uploadHere === null ? "" : uploadHere;
-  const menu = document.getElementById("newMenu");
-  document.getElementById("newBtn").onclick = e => { e.stopPropagation(); menu.style.display = menu.style.display === "none" ? "block" : "none"; };
-  document.body.onclick = () => { if (menu) menu.style.display = "none"; };
   document.getElementById("upFiles").onclick = () => document.getElementById("pickFiles").click();
   document.getElementById("upFolder").onclick = () => document.getElementById("pickFolder").click();
+  document.getElementById("upZip").onclick = () => document.getElementById("pickZip").click();
   document.getElementById("mkFolder").onclick = async () => {
     const name = prompt("New folder name (for example: 01 Emails Received):"); if (!name) return;
     const r = await fetch(`${P()}/mkdir?dir=${encodeURIComponent(dir)}&name=${encodeURIComponent(name)}`, { method: "POST" }).then(r => r.json());
@@ -348,10 +394,17 @@ async function renderFiles(body) {
   };
   document.getElementById("pickFiles").onchange = e => uploadAll([...e.target.files], dir, false);
   document.getElementById("pickFolder").onchange = e => uploadAll([...e.target.files], dir, true);
-  const zone = document.getElementById("dropZone");
-  zone.ondragover = e => { e.preventDefault(); zone.style.outline = "2px dashed var(--gold)"; };
-  zone.ondragleave = () => zone.style.outline = "";
-  zone.ondrop = e => { e.preventDefault(); zone.style.outline = ""; uploadAll([...e.dataTransfer.files], dir, false); };
+  document.getElementById("pickZip").onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    const st = document.getElementById("upSt"); st.className = "status building"; st.textContent = `Unpacking ${f.name}…`;
+    const r = await fetch(`${P()}/unzip?dir=${encodeURIComponent(dir)}&name=${encodeURIComponent(f.name)}`, { method: "POST", body: f }).then(r => r.json());
+    await render();
+    const s2 = document.getElementById("upSt"); if (s2) s2.textContent = r.error ? r.error : `Unpacked ${r.files} file(s) from ${f.name}. Press Build Brain when ready.`;
+  };
+  const zone = document.getElementById("dropZone"), hint = document.getElementById("dropHint");
+  zone.ondragover = e => { e.preventDefault(); hint.classList.add("on"); };
+  zone.ondragleave = () => hint.classList.remove("on");
+  zone.ondrop = e => { e.preventDefault(); hint.classList.remove("on"); uploadAll([...e.dataTransfer.files], dir, false); };
   body.querySelectorAll("[data-go]").forEach(x => x.onclick = () => { state.filesPath = x.dataset.go; render(); });
 }
 
@@ -386,7 +439,9 @@ async function renderBrain(body) {
     panel = `<h3>Pending approval</h3><p class="hint">Each Build Brain run lands here first. Read the checks, then press <b>Approve</b> to put it into the wiki, or <b>Reject</b> to throw it away. Nothing reaches the wiki until you approve.</p>` +
       (pd.runs.length ? pd.runs.map(r => `<div class="run"><b>Run ${esc(r.run)}</b> <span class="badge ${esc(r.status.replace(" ", ""))}">${esc(r.status)}</span> <span class="muted">· ${esc(r.ai)} · ${r.new_or_changed} new/changed of ${r.documents} documents</span>
         <ul><li>Added: ${r.added.map(esc).join(", ") || "none"}</li><li>Changed: ${r.changed.map(esc).join(", ") || "none"}</li><li>Removed: ${r.removed.map(esc).join(", ") || "none"}</li></ul>
+        ${namesHtml(r)}
         ${checksHtml(r)}
+        ${r.status === "approved" && (r.names || []).some(n => n.new_path) ? `<button data-undo="${esc(r.run)}" title="Put the original file names back">↩ Undo renames</button> ` : ""}
         ${r.status === "pending" ? `<button data-a="approve" data-r="${esc(r.run)}">Approve</button> <button data-a="reject" data-r="${esc(r.run)}">Reject</button>` : ""}</div>`).join("")
       : `<div class="placeholder">No runs yet. Add documents in <b>Files</b>, then press <b>Build Brain</b>.</div>`);
   } else if (state.brainView.startsWith("page:")) {
@@ -411,11 +466,25 @@ async function renderBrain(body) {
   drawGlobe(document.getElementById("globe"), pg.pages);
   body.querySelectorAll("[data-v]").forEach(x => x.onclick = () => { state.brainView = x.dataset.v; render(); });
   body.querySelectorAll("[data-page]").forEach(x => x.onclick = () => { state.brainView = "page:" + x.dataset.page; render(); });
+  body.querySelectorAll("[data-undo]").forEach(x => x.onclick = async () => {
+    if (!confirm("Put the original file names back for this run?")) return;
+    const r = await fetch(`${P()}/undo-names/${x.dataset.undo}`, { method: "POST" }).then(r => r.json());
+    alert(`${r.undone} file(s) renamed back.`); render();
+  });
   body.querySelectorAll("[data-a]").forEach(x => x.onclick = async () => {
     const r = await fetch(`${P()}/${x.dataset.a}/${x.dataset.r}`, { method: "POST" }).then(r => r.json());
     if (!r.ok) alert(r.error || "failed");
     render();
   });
+}
+
+function namesHtml(r) {
+  const ns = r.names || [];
+  if (!ns.length) return "";
+  const base = p => p.split(/[\\/]/).pop();
+  return `<div style="margin-top:6px"><b>Document names</b> <span class="muted">(${ns.filter(n => n.new_path).length} to rename on approval; originals elsewhere are never touched)</span>
+    <ul class="names">${ns.slice(0, 40).map(n => `<li>${esc(base(n.path))} → <b>${esc(n.name || "(no name)")}</b>${n.new_path ? "" : ' <span class="muted">(linked PC file: name shown only, not renamed)</span>'}
+      ${n.description ? `<br><span class="muted">${esc(n.description)}</span>` : ""}</li>`).join("")}</ul></div>`;
 }
 
 function checksHtml(r) {
@@ -453,7 +522,7 @@ function renderSettings(body) {
       <input type="text" id="description" value="${esc(s.description)}"></div>
     <div class="section"><h3>Instructions</h3><p class="hint">Standing orders the AI reads first every time. <b>What to do:</b> write what matters to you, e.g. "Track every date and amount. Flag contradictions."</p>
       <textarea id="instructions">${esc(s.instructions)}</textarea></div>
-    <div class="section"><h3>Extra PC folders (optional)</h3><p class="hint">To learn from a folder <i>without uploading it</i>, paste its path here, one per line (e.g. D:\\Insurance\\Letters). KastoBrain only reads them. <b>Most people just use + New → Upload in the Files tab instead.</b></p>
+    <div class="section"><h3>Extra PC folders (optional)</h3><p class="hint">To learn from a folder <i>without uploading it</i>, paste its path here, one per line (e.g. D:\\Insurance\\Letters). KastoBrain only reads them. <b>Most people just use the Upload tiles in the Files tab instead.</b></p>
       <textarea id="folders">${esc(s.folders.join("\n"))}</textarea></div>
     <div class="section"><h3>Private folders (never send)</h3><p class="hint">Folders the AI is told never to read, one per line. For real protection, keep private files out of this brain altogether.</p>
       <textarea id="never_send">${esc(s.never_send.join("\n"))}</textarea></div>
@@ -489,13 +558,18 @@ function renderSettings(body) {
       <textarea id="summary_instructions">${esc(m.summary_instructions)}</textarea></div>
     <button class="build" id="save">Save</button><span class="status" id="st"></span>`;
   }
-  if (state.sub === "Apps") panel = `<h3>Apps</h3><p class="hint">Messaging apps like Slack or Teams.</p><div class="placeholder">Not available yet. Nothing to set here.</div>`;
-  if (state.sub === "Connectors") panel = `<h3>Connectors</h3><p class="hint">Email and cloud storage (Gmail, Outlook, Drive).</p><div class="placeholder">Not available yet. For now, upload files in the Files tab.</div>`;
-  if (state.sub === "Skills") panel = `<h3>Skills</h3><p class="hint">Reusable instructions this brain can apply.</p><div class="placeholder">Not available yet. Use Context → Instructions for now.</div>`;
+  if (state.sub === "Connectors") panel = `<h3>Connectors for this brain</h3>
+    <p class="hint">Tick which custom MCP connectors this brain may use when building and answering. Add connectors on the <b>Connectors</b> page (sidebar).</p>
+    <div id="brainConn" class="muted">Loading…</div>`;
+  if (state.sub === "Skills") panel = `<h3>Run a skill on this brain</h3>
+    <p class="hint">A skill is a ready-made job. Press <b>Run</b>; the result is saved as a report here and in <b>Downloads</b>. Read-only: skills never change the brain.</p>
+    <div id="brainSkills" class="muted">Loading…</div>`;
   body.innerHTML = `<div class="body"><div class="sub">${subs}</div><div class="panel">${panel}</div></div>`;
   body.querySelectorAll("[data-s]").forEach(x => x.onclick = () => { state.sub = x.dataset.s; render(); });
   const upd = document.getElementById("upd"); if (upd) upd.onclick = startBuild;
   const save = document.getElementById("save"); if (save) save.onclick = saveSettings;
+  if (state.sub === "Connectors") fillBrainConnectors();
+  if (state.sub === "Skills") fillBrainSkills();
   if (state.sub === "Personality") {
     const fill = () => { const sel = document.getElementById("voice"); if (!sel) return;
       const want = (s.personality || {}).voice || "";
@@ -517,6 +591,7 @@ async function saveSettings() {
     instructions: document.getElementById("instructions").value, description: document.getElementById("description").value,
     folders: lines("folders"), never_send: lines("never_send"), links: lines("links"),
     ai: document.getElementById("ai").value, ai_ask: document.getElementById("ai_ask").value, ai_check: document.getElementById("ai_check").value };
+  else if (state.sub === "Connectors") changes = { connectors: [...document.querySelectorAll("[data-conn]:checked")].map(x => x.dataset.conn) };
   else if (state.sub === "Personality") changes = { personality: {
     tone: document.getElementById("tone").value, length: document.getElementById("length").value, voice: document.getElementById("voice").value } };
   else changes = { memory: {
@@ -547,9 +622,7 @@ async function pollBuild() {
 
 // ---------- PC Brain ----------
 async function renderPC() {
-  state.view = "pc";
-  document.querySelectorAll("[data-p]").forEach(a => a.classList.remove("on"));
-  document.getElementById("pcNav").classList.add("on");
+  state.view = "pc"; setNav();
   const d = await getJSON("/api/pcbrain");
   const rows = d.brains.map(b => `<tr><td><a class="nav" style="display:inline;padding:0" data-open="${esc(b.name)}">${esc(b.name)}</a><div class="muted" style="font-size:11px">${esc(b.description)}</div></td>
     <td>${b.pages}</td><td>${b.pending}</td><td>${b.sessions}</td><td>${esc(b.ai || "chatgpt")}</td></tr>`).join("");
@@ -564,7 +637,7 @@ async function renderPC() {
     <div class="tabs"><div class="tab on">Overview</div></div>
     <div class="body"><div class="panel" style="max-width:1000px">
       <h3>All brains</h3><p class="hint">Every brain on this PC. Click a name to open it.</p>
-      <table class="pc"><tr><th>Brain</th><th>Pages</th><th>Pending</th><th>Questions</th><th>AI</th></tr>${rows || '<tr><td colspan="5" class="muted">No brains yet. Click + New brain on the left.</td></tr>'}</table>
+      <table class="pc"><tr><th>Brain</th><th>Pages</th><th>Pending</th><th>Questions</th><th>AI</th></tr>${rows || '<tr><td colspan="5" class="muted">No brains yet. Click ＋ New brain on the left.</td></tr>'}</table>
       <h3>Search every brain</h3><p class="hint">Type a word or name and press Search. It looks through the pages of all brains.</p>
       <div class="ask"><input type="text" id="sq" placeholder="Search…"><button id="sBtn">Search</button></div><div id="sRes"></div>
       <h3 style="margin-top:22px">PC sorter (dry run only)</h3>
@@ -599,10 +672,14 @@ async function pollDry() {
 setInterval(() => fetch("/api/ping").catch(() => {}), 30000);
 fetch("/api/ping").catch(() => {});
 
-async function checkUpdate() {
+async function checkUpdate(manual) {
   const bar = document.getElementById("updBar");
   const u = await getJSON("/api/update").catch(() => null);
-  if (!u || !u.available) return;
+  if (!u) return;
+  if (u.error) { bar.style.display = "block"; bar.innerHTML = `Couldn't check for updates: ${esc(u.error)}. ${esc(u.detail || "")} <button id="updLater" style="margin-left:8px;padding:2px 8px">OK</button>`;
+    document.getElementById("updLater").onclick = () => bar.style.display = "none"; return; }
+  if (!u.available) { if (manual) { bar.style.display = "block"; bar.innerHTML = `You're on the latest version. <button id="updLater" style="margin-left:8px;padding:2px 8px">OK</button>`;
+    document.getElementById("updLater").onclick = () => bar.style.display = "none"; } return; }
   bar.style.display = "block";
   bar.innerHTML = `<b class="metal">Update available</b> · ${u.changes.length} change(s): ${esc(u.changes.slice(0, 3).map(c => c.replace(/^\w+ /, "")).join("; "))}
     <button class="build" id="updGo" style="margin-left:12px;padding:4px 12px">Update now</button>
@@ -671,9 +748,272 @@ function drawGlobe(cv, pages) {
   frame();
 }
 
+
+// ================= app-wide pages =================
+function pageShell(icon, title, intro, inner) {
+  setNav();
+  document.getElementById("main").innerHTML = `
+    <div class="crumb">KastoBrain</div>
+    <div class="page-title"><div class="dot">${icon}</div><span class="metal">${esc(title)}</span></div>
+    <p class="hint" style="max-width:900px">${intro}</p>
+    <div class="panel" style="max-width:1100px">${inner}</div>`;
+}
+
+// ---------- status line & notifications ----------
+async function refreshFoot() {
+  const s = await getJSON("/api/status").catch(() => null);
+  const f = document.getElementById("foot"); if (!f || !s) return;
+  const busy = [...s.busy.building.map(b => `building ${b}`), ...Object.entries(s.busy.skills).map(([b, k]) => `${k} on ${b}`)];
+  f.innerHTML = `<span class="bell" id="bell" title="Notifications">🔔${s.unread ? `<span class="n">${s.unread}</span>` : ""}</span>
+    <div>● Engine <b>running</b></div>
+    <div>AI agents: <b>${s.agents ? `${s.agents.installed} installed · ${s.agents.connected} connected` : "check in Settings"}</b></div>
+    <div>Version <b>${esc(s.version)}</b>${s.update.available ? ' · <b style="color:var(--gold)">update ready</b>' : s.update.error ? " · update check failed" : ""}</div>
+    ${busy.length ? `<div style="color:var(--violet)">⟳ ${esc(busy.join(", "))}</div>` : ""}`;
+  document.getElementById("bell").onclick = showNotifications;
+}
+
+async function showNotifications() {
+  const d = await getJSON("/api/notifications?read=1");
+  state.view = "notifications";
+  pageShell("🔔", "Notifications", "Messages from Build Brain, skills and workflows. Newest first.",
+    d.items.length ? d.items.map(n => `<div class="run"><span class="pill ${n.kind === "warn" ? "no" : "ok"}">${esc(n.kind)}</span>
+      <span class="muted">${esc(n.time)}${n.brain ? " · " + esc(n.brain) : ""}</span><div style="margin-top:4px">${esc(n.text)}</div></div>`).join("")
+      : '<div class="placeholder">No notifications yet.</div>');
+  refreshFoot();
+}
+
+// ---------- ⚙ Settings (app-wide) ----------
+async function renderAppSettings() {
+  state.view = "settings";
+  const [a, st] = await Promise.all([getJSON("/api/app-settings"), getJSON("/api/ai-status")]);
+  const s = a.settings, p = s.personality;
+  const opt = (list, val) => list.map(([v, t]) => `<option value="${v}" ${v === val ? "selected" : ""}>${t}</option>`).join("");
+  const aiRows = st.ais.map(x => `<tr><td><b>${esc(x.label)}</b></td>
+      <td>${x.installed ? `<span class="pill ok">installed</span> <span class="muted">${esc(x.version)}</span>` : '<span class="pill no">not installed</span>'}</td>
+      <td>${x.signed_in === true ? '<span class="pill ok">signed in</span>' : x.signed_in === false ? '<span class="pill no">not signed in</span>' : '<span class="pill">not checked</span>'}</td>
+      <td>${x.mcp === true ? '<span class="pill ok">connected</span>' : x.mcp === false ? '<span class="pill">not connected</span>' : '<span class="pill">unknown</span>'}</td></tr>`).join("");
+  pageShell("⚙", "Settings", "Settings for the whole app. New brains start with these; each brain can still change its own in its Settings tab.", `
+    <div class="section"><h3>Your agent</h3><p class="hint">The name your assistant uses, and how it talks. It changes the style only; the rules (sources, no guessing, your approval) never change.</p>
+      <p class="hint" style="margin:10px 0 4px">Agent name</p><input type="text" id="aName" value="${esc(s.agent_name)}">
+      <p class="hint" style="margin:10px 0 4px">Tone</p><select id="aTone">${opt([["professional", "Professional: clear and formal"], ["friendly", "Friendly: warm and plain"], ["bubbly", "Bubbly: upbeat and lively"], ["blunt", "Blunt: short and direct"]], p.tone)}</select>
+      <p class="hint" style="margin:10px 0 4px">Answer length</p><select id="aLen">${opt([["short", "Short"], ["normal", "Normal"], ["detailed", "Detailed"]], p.length)}</select>
+      <p class="hint" style="margin:10px 0 4px">Read-aloud voice</p><select id="aVoice"><option value="">Windows default</option></select>
+      <button id="aTest" style="margin-top:8px">Test voice</button></div>
+    <div class="section"><h3>AI team (defaults for new brains)</h3><p class="hint">Which AI does which job. They run on your own plans.</p>
+      ${aiSelect("aAi", "AI that builds brains", s.ai, false)}${aiSelect("aAsk", "AI that answers questions", s.ai_ask, false)}${aiSelect("aChk", "Checker AI", s.ai_check, true)}</div>
+    <div class="section"><h3>Updates</h3>
+      <div class="row"><span>Check for a new version when KastoBrain opens<br><small class="muted">Free; only the program changes, never your brains. Nothing updates until you press Update now.</small></span>
+      <input type="checkbox" id="aUpd" ${s.update_check ? "checked" : ""}></div>
+      <div class="row"><span>Check now</span><button id="aUpdNow">Check for updates</button></div></div>
+    <div class="section"><h3>Storage</h3><p class="hint">All brains, files and downloads are stored here on this PC:</p><code class="cp">${esc(a.root)}</code></div>
+    <button class="build" id="aSave">Save settings</button><span class="status" id="aSt"></span>
+    <div class="section" style="margin-top:28px"><h3>AI status</h3><p class="hint">Which AI apps are on this PC, signed in, and connected to KastoBrain (see <b>Connectors</b>). <button id="aRefresh" style="margin-left:8px;padding:2px 8px">Re-check</button></p>
+      <table class="pc"><tr><th>AI</th><th>Installed</th><th>Signed in</th><th>KastoBrain connector</th></tr>${aiRows}</table></div>`);
+  const fill = () => { const sel = document.getElementById("aVoice"); if (!sel) return;
+    sel.innerHTML = `<option value="">Windows default</option>` + speechSynthesis.getVoices().map(v => `<option ${v.name === p.voice ? "selected" : ""}>${esc(v.name)}</option>`).join(""); };
+  fill(); speechSynthesis.onvoiceschanged = fill;
+  document.getElementById("aTest").onclick = () => { const u = new SpeechSynthesisUtterance(`Hello, I'm ${document.getElementById("aName").value}.`);
+    const v = speechSynthesis.getVoices().find(v => v.name === document.getElementById("aVoice").value); if (v) u.voice = v; speechSynthesis.speak(u); };
+  document.getElementById("aSave").onclick = async () => {
+    const r = await postJSON("/api/app-settings", { agent_name: document.getElementById("aName").value,
+      personality: { tone: document.getElementById("aTone").value, length: document.getElementById("aLen").value, voice: document.getElementById("aVoice").value },
+      ai: document.getElementById("aAi").value, ai_ask: document.getElementById("aAsk").value, ai_check: document.getElementById("aChk").value,
+      update_check: document.getElementById("aUpd").checked });
+    document.getElementById("aSt").textContent = r.settings ? "Saved ✓" : "Not saved";
+  };
+  document.getElementById("aUpdNow").onclick = async () => { await checkUpdate(true); refreshFoot(); };
+  document.getElementById("aRefresh").onclick = async () => { await getJSON("/api/ai-status?refresh=1"); renderAppSettings(); refreshFoot(); };
+}
+
+// ---------- 🔌 Connectors ----------
+const APP_CARDS = [
+  ["📁", "Google Drive", "Link your Google Drive folder (the synced G: drive) to a brain. It reads the files there.", "folder"],
+  ["☁", "OneDrive", "Link your synced OneDrive folder to a brain.", "folder"],
+  ["✉", "Email files", "Import saved emails (.eml, .msg). In a brain's Files tab, use Upload files or Upload folder.", "email"],
+  ["📧", "Gmail", "Direct sign-in needs Google app approval, so it isn't available yet. You can add it as a custom MCP connector if you have one.", "soon"],
+  ["📨", "Outlook", "Direct sign-in isn't available yet. Use a custom MCP connector, or save emails and import them.", "soon"],
+  ["🐙", "GitHub", "Not built in yet. Add a GitHub MCP server below as a custom connector.", "soon"],
+  ["💬", "Slack", "Not built in yet. Add a Slack MCP server below as a custom connector.", "soon"],
+  ["📝", "Notion", "Not built in yet. Add a Notion MCP server below as a custom connector.", "soon"],
+];
+
+async function renderConnectors() {
+  state.view = "connectors";
+  const [a, st, pr] = await Promise.all([getJSON("/api/app-settings"), getJSON("/api/ai-status"), getJSON("/api/projects")]);
+  const mc = a.settings.mcp_connectors || [];
+  const cmd = a.mcp_command.map(x => x.includes(" ") ? `"${x}"` : x).join(" ");
+  const agents = st.ais.map(x => `<div class="gcard"><h4>${esc(x.label)}</h4>
+      <p>${x.installed ? "Installed on this PC." : "Not installed on this PC."} ${x.mcp === true ? "KastoBrain is connected: this AI can read your brains." : ""}</p>
+      ${x.installed && x.key !== "grok" ? (x.mcp === true ? `<button data-mcp="${x.key}" data-on="0">Disconnect</button>` : `<button class="build" style="margin:0" data-mcp="${x.key}" data-on="1">Connect</button>`)
+        : x.installed ? '<span class="pill">use the copy-paste setup below</span>' : '<span class="pill no">install it first</span>'}</div>`).join("");
+  const apps = APP_CARDS.map(([i, n, d, k]) => `<div class="gcard"><h4>${i} ${n}</h4><p>${d}</p>
+      ${k === "folder" ? `<button data-link="${n}">Link a folder…</button>` : k === "soon" ? '<span class="pill">coming later</span>' : '<span class="pill ok">available</span>'}</div>`).join("");
+  const custom = mc.map((m, i) => `<div class="gcard"><h4>🧩 ${esc(m.name)}</h4><p>${esc(m.url || (Array.isArray(m.command) ? m.command.join(" ") : m.command) || "")}</p>
+      <button data-del="${i}">Remove</button></div>`).join("");
+  pageShell("🔌", "Connectors", "Connect KastoBrain to your AI apps and to other tools. Nothing is connected until you press a button, and you're asked first.", `
+    <h3>Your AI agents</h3><p class="hint">Connect KastoBrain so these AI apps can read your brains and start Build Brain (MCP). They can't approve, delete or move anything.</p>
+    <div class="grid">${agents}</div>
+    <details><summary class="muted" style="cursor:pointer">Copy-paste setup for any other MCP app</summary>
+      <code class="cp">${esc(cmd)}</code></details>
+    <h3 style="margin-top:22px">Apps and files</h3><div class="grid">${apps}</div>
+    <h3>Custom MCP connectors</h3><p class="hint">Add any tool that has an MCP server. Then switch it on per brain (brain → Settings → Connectors). Brains only use connectors you switch on.</p>
+    <div class="grid">${custom || '<div class="placeholder">None yet.</div>'}</div>
+    <div class="run"><b>+ Add MCP connector</b>
+      <p class="hint" style="margin:8px 0 4px">Name</p><input type="text" id="mName" placeholder="for example: github">
+      <p class="hint" style="margin:8px 0 4px">Server address (URL) <i>or</i> command to start it</p><input type="text" id="mTarget" placeholder="https://… or: npx -y @modelcontextprotocol/server-github">
+      <button class="build" id="mAdd" style="margin-top:10px">Add connector</button>
+      <p class="hint" style="margin-top:8px">Custom connectors work with Claude Code and Codex. Keys or passwords are never stored here; set them the way that tool's own instructions say.</p></div>`);
+  document.querySelectorAll("[data-mcp]").forEach(b => b.onclick = async () => {
+    const on = b.dataset.on === "1", label = st.ais.find(x => x.key === b.dataset.mcp).label;
+    if (!confirm(`${on ? "Connect" : "Disconnect"} KastoBrain ${on ? "to" : "from"} ${label}?`)) return;
+    b.textContent = "Working…";
+    const r = await postJSON("/api/mcp/connect", { key: b.dataset.mcp, connect: on });
+    alert((r.ok ? "Done. " : "Didn't work. ") + (r.message || "")); renderConnectors(); refreshFoot();
+  });
+  document.querySelectorAll("[data-link]").forEach(b => b.onclick = async () => {
+    const brains = pr.projects; if (!brains.length) return alert("Create a brain first.");
+    const brainName = prompt(`Which brain should read your ${b.dataset.link} folder?\n${brains.join(", ")}`, brains[0]); if (!brainName) return;
+    const folder = prompt(`Paste the ${b.dataset.link} folder path (open it in File Explorer and copy the address bar):`); if (!folder) return;
+    const cur = await getJSON(`/api/project/${encodeURIComponent(brainName)}`); if (cur.error) return alert("No brain called " + brainName);
+    const r = await postJSON(`/api/project/${encodeURIComponent(brainName)}/settings`, { folders: [...cur.settings.folders, folder] });
+    alert(r.saved ? `Linked. ${brainName} will read that folder on its next Build Brain.` : "Not saved.");
+  });
+  document.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+    if (!confirm("Remove this connector?")) return;
+    mc.splice(+b.dataset.del, 1); await postJSON("/api/app-settings", { mcp_connectors: mc }); renderConnectors();
+  });
+  document.getElementById("mAdd").onclick = async () => {
+    const name = document.getElementById("mName").value.trim(), t = document.getElementById("mTarget").value.trim();
+    if (!name || !t) return alert("Give it a name and a URL or command.");
+    mc.push(/^https?:\/\//.test(t) ? { name, url: t } : { name, command: t });
+    await postJSON("/api/app-settings", { mcp_connectors: mc }); renderConnectors();
+  };
+}
+
+async function fillBrainConnectors() {
+  const a = await getJSON("/api/app-settings"), box = document.getElementById("brainConn"); if (!box) return;
+  const mine = new Set(state.settings.connectors || []);
+  const mc = a.settings.mcp_connectors || [];
+  box.innerHTML = mc.length ? mc.map(m => `<div class="row"><span>🧩 <b>${esc(m.name)}</b><br><small class="muted">${esc(m.url || m.command)}</small></span>
+      <input type="checkbox" data-conn="${esc(m.name)}" ${mine.has(m.name) ? "checked" : ""}></div>`).join("") + '<button class="build" id="save" style="margin-top:12px">Save</button><span class="status" id="st"></span>'
+    : 'No custom connectors yet. Add them on the <b>Connectors</b> page in the sidebar.';
+  const sv = document.getElementById("save"); if (sv) sv.onclick = saveSettings;
+}
+
+// ---------- 🧩 Skills ----------
+async function renderSkillsPage() {
+  state.view = "skills";
+  const [k, pr] = await Promise.all([getJSON("/api/skills"), getJSON("/api/projects")]);
+  const cards = k.skills.map(sk => `<div class="gcard"><h4>${esc(sk.icon)} ${esc(sk.name)} ${sk.builtin ? '<span class="pill">built-in</span>' : ""}</h4>
+      <p>${esc(sk.description)}</p>
+      <select data-brain="${esc(sk.id)}" style="width:auto">${pr.projects.map(p => `<option>${esc(p)}</option>`).join("")}</select>
+      <button class="build" style="margin:6px 0 0" data-run="${esc(sk.id)}" ${pr.projects.length ? "" : "disabled"}>Run</button>
+      <button data-edit="${esc(sk.id)}" style="margin-top:6px">Edit</button>
+      ${sk.builtin ? "" : `<button data-rm="${esc(sk.id)}" style="margin-top:6px">Remove</button>`}</div>`).join("");
+  pageShell("🧩", "Skills", "Ready-made jobs you can run on any brain. Pick a brain and press <b>Run</b>. The result is saved as a report (see <b>Downloads</b>). Skills only read; they never change a brain.", `
+    <div class="grid">${cards}</div>
+    <div class="run" id="skForm"><b id="skTitle">+ Make your own skill</b>
+      <input type="hidden" id="skId">
+      <p class="hint" style="margin:8px 0 4px">Name</p><input type="text" id="skName" placeholder="for example: Deadlines">
+      <p class="hint" style="margin:8px 0 4px">One-line description</p><input type="text" id="skDesc" placeholder="Every deadline and what's due">
+      <p class="hint" style="margin:8px 0 4px">Instructions: what should it do?</p><textarea id="skPrompt" placeholder="List every deadline, due date and time limit in this brain, soonest first, with sources."></textarea>
+      <button class="build" id="skSave" style="margin-top:10px">Save skill</button></div>`);
+  document.querySelectorAll("[data-run]").forEach(b => b.onclick = async () => {
+    const brainName = document.querySelector(`[data-brain="${b.dataset.run}"]`).value;
+    const r = await fetch(`/api/project/${encodeURIComponent(brainName)}/skill/${encodeURIComponent(b.dataset.run)}`, { method: "POST" }).then(r => r.json());
+    alert(r.started ? `Running on ${brainName}. You'll get a notification (🔔) when the report is ready in Downloads.` : (r.error || "A skill is already running on that brain."));
+    refreshFoot();
+  });
+  document.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => {
+    const sk = k.skills.find(x => x.id === b.dataset.edit);
+    document.getElementById("skTitle").textContent = "Edit: " + sk.name; document.getElementById("skId").value = sk.id;
+    document.getElementById("skName").value = sk.name; document.getElementById("skDesc").value = sk.description;
+    document.getElementById("skPrompt").value = sk.prompt; document.getElementById("skForm").scrollIntoView();
+  });
+  document.querySelectorAll("[data-rm]").forEach(b => b.onclick = async () => {
+    if (!confirm("Remove this skill? (It is kept in the Skills folder as .removed.json.)")) return;
+    await postJSON("/api/skills/delete", { id: b.dataset.rm }); renderSkillsPage();
+  });
+  document.getElementById("skSave").onclick = async () => {
+    const r = await postJSON("/api/skills", { id: document.getElementById("skId").value || undefined, name: document.getElementById("skName").value,
+      description: document.getElementById("skDesc").value, prompt: document.getElementById("skPrompt").value });
+    if (r.error) return alert(r.error); renderSkillsPage();
+  };
+}
+
+async function fillBrainSkills() {
+  const [k, rp] = await Promise.all([getJSON("/api/skills"), getJSON(`${P()}/reports`)]);
+  const box = document.getElementById("brainSkills"); if (!box) return;
+  box.innerHTML = `<div class="grid">${k.skills.map(sk => `<div class="gcard"><h4>${esc(sk.icon)} ${esc(sk.name)}</h4><p>${esc(sk.description)}</p>
+      <button class="build" style="margin:0" data-srun="${esc(sk.id)}" ${rp.running ? "disabled" : ""}>Run</button></div>`).join("")}</div>
+    ${rp.running ? `<p class="status building">Running: ${esc(rp.running)}…</p>` : ""}
+    <h3>Reports for this brain</h3>${rp.reports.length ? `<table class="files">${rp.reports.map(r => `<tr><td>${esc(r.name)}</td>
+      <td style="width:40px"><a href="${P()}/download?path=${encodeURIComponent(r.path)}" download title="Download">⬇</a></td></tr>`).join("")}</table>` : '<div class="placeholder">No reports yet.</div>'}`;
+  box.querySelectorAll("[data-srun]").forEach(b => b.onclick = async () => {
+    await fetch(`${P()}/skill/${encodeURIComponent(b.dataset.srun)}`, { method: "POST" }); fillBrainSkills(); refreshFoot();
+  });
+  if (rp.running) setTimeout(() => { if (state.sub === "Skills" && document.getElementById("brainSkills")) fillBrainSkills(); }, 5000);
+}
+
+// ---------- 🔁 Workflows ----------
+async function renderWorkflows() {
+  state.view = "workflows";
+  const [w, pr, k] = await Promise.all([getJSON("/api/workflows"), getJSON("/api/projects"), getJSON("/api/skills")]);
+  const items = w.workflows;
+  const TRIG = { manual: "Only when I press Run", new_files: "When new files are added", daily: "Every day", weekly: "Every week" };
+  const stepName = s => s === "build" ? "Build Brain (+ checker) → Pending" : (k.skills.find(x => "skill:" + x.id === s) || { name: s }).name + " report";
+  const rows = items.map((x, i) => `<div class="gcard"><h4>🔁 ${esc(x.name)}</h4>
+      <p><b>Brain:</b> ${esc(x.brain || "(none)")} · <b>When:</b> ${TRIG[x.trigger]}<br><b>Steps:</b> ${x.steps.map(stepName).map(esc).join(" → ") || "none"}${x.notify ? " → 🔔 notify me" : ""}<br>
+      <b>Last run:</b> ${esc(x.last_run || "never")} · ${x.enabled ? '<span class="pill ok">on</span>' : '<span class="pill">off</span>'}</p>
+      <button class="build" style="margin:0" data-wrun="${esc(x.id)}">Run now</button> <button data-wtog="${i}">${x.enabled ? "Turn off" : "Turn on"}</button> <button data-wdel="${i}">Remove</button></div>`).join("");
+  pageShell("🔁", "Workflows", "Chains of jobs that run by themselves. Builds from workflows still wait in <b>Pending approval</b>; nothing goes into a brain without you. Automatic workflows run while KastoBrain is open.", `
+    <div class="grid">${rows || '<div class="placeholder">No workflows yet. Make one below.</div>'}</div>
+    <div class="run"><b>+ New workflow</b>
+      <p class="hint" style="margin:8px 0 4px">Start from</p><select id="wTpl">${w.templates.map((t, i) => `<option value="${i}">${esc(t.name)}</option>`).join("")}<option value="-1">Blank</option></select>
+      <p class="hint" style="margin:8px 0 4px">Brain</p><select id="wBrain">${pr.projects.map(p => `<option>${esc(p)}</option>`).join("")}</select>
+      <p class="hint" style="margin:8px 0 4px">When</p><select id="wTrig">${Object.entries(TRIG).map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}</select>
+      <p class="hint" style="margin:8px 0 4px">Steps (tick in order)</p>
+      <div class="row"><span>Build Brain (+ checker) → Pending approval</span><input type="checkbox" data-step="build"></div>
+      ${k.skills.map(sk => `<div class="row"><span>${esc(sk.icon)} ${esc(sk.name)} report</span><input type="checkbox" data-step="skill:${esc(sk.id)}"></div>`).join("")}
+      <div class="row"><span>🔔 Notify me when it finishes</span><input type="checkbox" id="wNote" checked></div>
+      <p class="hint" style="margin:8px 0 4px">Name</p><input type="text" id="wName">
+      <button class="build" id="wAdd" style="margin-top:10px" ${pr.projects.length ? "" : "disabled"}>Save workflow</button></div>`);
+  const applyTpl = () => { const t = w.templates[+document.getElementById("wTpl").value];
+    document.getElementById("wName").value = t ? t.name : ""; if (t) document.getElementById("wTrig").value = t.trigger;
+    document.querySelectorAll("[data-step]").forEach(c => c.checked = !!t && t.steps.includes(c.dataset.step)); };
+  document.getElementById("wTpl").onchange = applyTpl; applyTpl();
+  document.getElementById("wAdd").onclick = async () => {
+    const steps = [...document.querySelectorAll("[data-step]:checked")].map(c => c.dataset.step);
+    if (!steps.length) return alert("Tick at least one step.");
+    items.push({ name: document.getElementById("wName").value || "Workflow", brain: document.getElementById("wBrain").value,
+      trigger: document.getElementById("wTrig").value, steps, notify: document.getElementById("wNote").checked, enabled: true });
+    await postJSON("/api/workflows", { workflows: items }); renderWorkflows();
+  };
+  document.querySelectorAll("[data-wrun]").forEach(b => b.onclick = async () => {
+    const r = await postJSON("/api/workflows/run", { id: b.dataset.wrun });
+    alert(r.started ? "Started. You'll get a notification (🔔) when it finishes." : "Couldn't start (check the brain still exists)."); refreshFoot();
+  });
+  document.querySelectorAll("[data-wtog]").forEach(b => b.onclick = async () => { items[+b.dataset.wtog].enabled = !items[+b.dataset.wtog].enabled; await postJSON("/api/workflows", { workflows: items }); renderWorkflows(); });
+  document.querySelectorAll("[data-wdel]").forEach(b => b.onclick = async () => { if (!confirm("Remove this workflow?")) return; items.splice(+b.dataset.wdel, 1); await postJSON("/api/workflows", { workflows: items }); renderWorkflows(); });
+}
+
+// ---------- ⬇ Downloads ----------
+async function renderDownloads() {
+  state.view = "downloads";
+  const d = await getJSON("/api/downloads");
+  const size = n => n < 1048576 ? (n / 1024).toFixed(0) + " KB" : (n / 1048576).toFixed(1) + " MB";
+  const rows = d.files.map(f => `<tr><td>${f.name.endsWith(".zip") ? "🗜" : "📄"} ${esc(f.name)}</td><td class="dt">${new Date(f.mtime * 1000).toLocaleString()}</td>
+      <td class="sz">${size(f.size)}</td><td style="width:40px"><a href="/api/downloads/file?name=${encodeURIComponent(f.name)}" download title="Download">⬇</a></td></tr>`).join("");
+  pageShell("⬇", "Downloads", "Everything you've exported: brain zips and skill reports. They're also saved in this folder on your PC:", `
+    <code class="cp">${esc(d.folder)}</code>
+    <div style="margin-top:14px">${rows ? `<table class="files">${rows}</table>` : '<div class="placeholder">Nothing here yet. Use <b>⬇ Download brain (.zip)</b> on a brain, or run a <b>Skill</b>.</div>'}</div>`);
+}
+
+async function checkUpdateNow() { return checkUpdate(true); }
+
 checkUpdate();
 loadProjects();
+refreshFoot(); setInterval(refreshFoot, 60000);
 </script>
-
 </body>
 </html>

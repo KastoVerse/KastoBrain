@@ -26,6 +26,8 @@ import json
 import os
 import shutil
 import subprocess
+import re
+import shlex
 import sys
 import tempfile
 import time
@@ -72,6 +74,14 @@ Follow these phases in order.
    change, change nothing.
    Finally rewrite ./wiki/index.md: one line per page,
    "- [[Title]] (Category): one-line summary".
+
+5. NAME THE DOCUMENTS. For every NEW or CHANGED document, work out what it is and write
+   ./NAMES.json (the only file you may create outside ./wiki), like:
+   {{"<full path exactly as listed>": {{"name": "2025-03-12 – Acme Insurance – Decline letter – Claim 55501",
+                                      "description": "One line saying what this document is."}}}}
+   Name pattern: date (YYYY-MM-DD, if the document has one) – who it is from – what it is – reference.
+   No file extension, no slashes, no quotes, at most 120 characters. If unsure what a document is, say so
+   in the description and give a cautious name. Never guess facts.
 
 Finish with a short plain-English report of what you changed and why.
 """
@@ -160,14 +170,25 @@ def list_pages(wiki):
     return out
 
 
-def run_ai(ai, workdir, prompt, folders, write=True):
-    """Run one AI job on your own plan. write=False means read-only (for Ask)."""
+def run_ai(ai, workdir, prompt, folders, write=True, mcp=None):
+    """Run one AI job on your own plan. write=False means read-only (for Ask).
+    mcp: optional list of custom MCP connectors {name, command|url} this job may use."""
+    mcp = [m for m in (mcp or []) if m.get("name")]
     if os.environ.get("KASTOBRAIN_TEST_AI"):
         cmd = [sys.executable, os.environ["KASTOBRAIN_TEST_AI"], prompt]
     elif ai == "chatgpt":
         last = Path(tempfile.gettempdir()) / f"kastobrain-codex-{os.getpid()}-{time.time_ns()}.txt"
         cmd = ["codex", "exec", "--skip-git-repo-check", "--output-last-message", str(last),
-               "--sandbox", "workspace-write" if write else "read-only", prompt]
+               "--sandbox", "workspace-write" if write else "read-only"]
+        for m in mcp:
+            key = re.sub(r"[^A-Za-z0-9_]", "_", m["name"])
+            if m.get("url"):
+                cmd += ["-c", f'mcp_servers.{key}.url={json.dumps(m["url"])}']
+            elif m.get("command"):
+                parts = m["command"] if isinstance(m["command"], list) else shlex.split(m["command"], posix=False)
+                cmd += ["-c", f'mcp_servers.{key}.command={json.dumps(parts[0])}',
+                        "-c", f'mcp_servers.{key}.args={json.dumps(parts[1:])}']
+        cmd.append(prompt)
     elif ai == "grok":
         cmd = ["grok", "-p", prompt]
     elif ai == "gemini":
@@ -176,7 +197,21 @@ def run_ai(ai, workdir, prompt, folders, write=True):
             cmd += ["--include-directories", f]
     else:
         tools = "Read,Glob,Grep,WebSearch,WebFetch" + (",Write,Edit" if write else "")
+        if mcp:
+            servers = {}
+            for m in mcp:
+                key = re.sub(r"[^A-Za-z0-9_-]", "_", m["name"])
+                if m.get("url"):
+                    servers[key] = {"type": "http", "url": m["url"]}
+                elif m.get("command"):
+                    parts = m["command"] if isinstance(m["command"], list) else shlex.split(m["command"], posix=False)
+                    servers[key] = {"command": parts[0], "args": parts[1:]}
+                tools += f",mcp__{key}"
+            cfg = Path(tempfile.gettempdir()) / f"kastobrain-mcp-{os.getpid()}-{time.time_ns()}.json"
+            cfg.write_text(json.dumps({"mcpServers": servers}), encoding="utf-8")
         cmd = ["claude", "-p", prompt, "--allowedTools", tools]
+        if mcp:
+            cmd += ["--mcp-config", str(cfg)]
         if write:
             cmd += ["--permission-mode", "acceptEdits"]
         for f in folders:
@@ -240,6 +275,7 @@ def build(root, name, log=print):
     }
     if code == 0 and not (changes["added"] or changes["changed"] or changes["removed"]):
         changes["status"] = "no changes"
+    changes["names"] = read_names(rdir, docs, pdir)
     touched = changes["added"] + changes["changed"]
     if changes["status"] == "pending" and touched:
         import verify
@@ -259,6 +295,102 @@ def build(root, name, log=print):
     return changes
 
 
+BAD_NAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def clean_name(name):
+    name = BAD_NAME.sub(" ", str(name)).replace("..", ".").strip(" .")
+    return re.sub(r"\s+", " ", name)[:120]
+
+
+def read_names(rdir, docs, pdir):
+    """Turn the AI's NAMES.json into checked rename proposals. Only uploaded copies can be renamed."""
+    raw = {}
+    try:
+        raw = json.loads((rdir / "NAMES.json").read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    listed = {d["path"] for d in docs}
+    own = (pdir / "Files").resolve()
+    out = []
+    for path, info in raw.items() if isinstance(raw, dict) else []:
+        if path not in listed or not isinstance(info, dict):
+            continue
+        name = clean_name(info.get("name", ""))
+        item = {"path": path, "name": name, "description": str(info.get("description", ""))[:300], "new_path": None}
+        p = Path(path)
+        if name and own in p.resolve().parents:
+            target = p.with_name(name + p.suffix)
+            if target != p:
+                item["new_path"] = str(target)
+        out.append(item)
+    return out
+
+
+def apply_names(pdir, run, names, wiki_dir, log=print):
+    """Rename uploaded copies, fix citations in the wiki, record everything for undo and display."""
+    info_file, log_file = pdir / "docinfo.json", pdir / "renames.json"
+    info = json.loads(info_file.read_text(encoding="utf-8")) if info_file.exists() else {}
+    history = json.loads(log_file.read_text(encoding="utf-8")) if log_file.exists() else []
+    moved = {}
+    for n in names:
+        old, new = n["path"], n.get("new_path")
+        current = old
+        if new and Path(old).is_file():
+            target, i = Path(new), 1
+            while target.exists():
+                i += 1
+                target = Path(new).with_name(f"{Path(new).stem} ({i}){Path(new).suffix}")
+            os.rename(old, target)
+            moved[old] = str(target)
+            current = str(target)
+            history.append({"run": run, "old": old, "new": current, "time": now_id()})
+            log(f"  renamed: {Path(old).name} -> {target.name}")
+        prev = info.pop(old, {})
+        info[current] = {"name": n.get("name") or prev.get("name", ""), "description": n.get("description", ""),
+                         "original": prev.get("original") or Path(old).name}
+    if moved:
+        for f in Path(wiki_dir).rglob("*.md"):
+            t = f.read_text(encoding="utf-8")
+            t2 = t
+            for a, b in moved.items():
+                t2 = t2.replace(a, b)
+            if t2 != t:
+                f.write_text(t2, encoding="utf-8")
+    info_file.write_text(json.dumps(info, indent=2, ensure_ascii=False), encoding="utf-8")
+    log_file.write_text(json.dumps(history, indent=2, ensure_ascii=False), encoding="utf-8")
+    return moved
+
+
+def undo_names(root, name, run, log=print):
+    """Put back the original file names from one approved run."""
+    pdir = root / "Projects" / name
+    log_file = pdir / "renames.json"
+    history = json.loads(log_file.read_text(encoding="utf-8")) if log_file.exists() else []
+    info_file = pdir / "docinfo.json"
+    info = json.loads(info_file.read_text(encoding="utf-8")) if info_file.exists() else {}
+    back, keep = {}, []
+    for h in history:
+        if h["run"] == run and Path(h["new"]).is_file() and not Path(h["old"]).exists():
+            os.rename(h["new"], h["old"])
+            back[h["new"]] = h["old"]
+            if h["new"] in info:
+                info[h["old"]] = info.pop(h["new"])
+        else:
+            keep.append(h)
+    for f in (pdir / "wiki").rglob("*.md"):
+        t = f.read_text(encoding="utf-8")
+        t2 = t
+        for a, b in back.items():
+            t2 = t2.replace(a, b)
+        if t2 != t:
+            f.write_text(t2, encoding="utf-8")
+    log_file.write_text(json.dumps(keep, indent=2, ensure_ascii=False), encoding="utf-8")
+    info_file.write_text(json.dumps(info, indent=2, ensure_ascii=False), encoding="utf-8")
+    log(f"Undid {len(back)} rename(s) from run {run}.")
+    return len(back)
+
+
 def approve(root, name, run, log=print):
     pdir = root / "Projects" / name
     rdir = pdir / "pending" / run
@@ -270,6 +402,13 @@ def approve(root, name, run, log=print):
         shutil.rmtree(prev)          # only the one previous generation is kept
     wiki.rename(prev)
     shutil.copytree(rdir / "wiki", wiki)
+    moved = apply_names(pdir, run, changes.get("names", []), wiki, log)
+    if moved:                                # renamed files keep their "already read" status
+        keys = set(changes["doc_keys"])
+        for d in scan_documents(load_settings(pdir), pdir)[0]:
+            if d["path"] in moved.values():
+                keys.add(doc_key(d))
+        changes["doc_keys"] = sorted(keys)
     for p in changes["removed"]:      # removals go in the deletion log so Dream never re-creates them
         with open(pdir / "deletions.md", "a", encoding="utf-8") as f:
             f.write(f"- {p} (removed in run {run})\n")

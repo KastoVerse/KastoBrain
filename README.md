@@ -12,16 +12,22 @@ Only this code lives on GitHub. Your documents, brains, wiki and history stay on
 
 ## What's in it
 
+**Sidebar:** 🧠 PC Brain · your brains · ＋ New brain · 🧩 Skills · 🔁 Workflows · 🔌 Connectors · ⬇ Downloads · ⚙ Settings,
+and a status line (engine, AI agents, version, updates, 🔔 notifications).
+
 | Part | What it does |
 |---|---|
-| **Build Brain** | Dream run: orient, summarise, attach facts to subjects, update the wiki. Result goes to **Pending**. |
-| **Pending approval** | Approve puts it into the wiki (previous wiki kept as `wiki.previous`). Reject leaves the wiki untouched. |
-| **Auto-update** | Hourly or daily, in Settings → Memory. Runs while the app is open. Still goes to Pending. |
-| **Ask** (Overview tab) | Ask a brain a question. Answers come from the wiki with sources. Read-only. Every question is kept and Build Brain learns from it. |
-| **Files** tab | Your PC folders, read in place. Never moves or changes anything. |
-| **Brain** tab | Page cards, the gold/silver/purple globe, Pending approval. |
-| **PC Brain** | Overview of every brain, search across all brains, and the **PC sorter (dry run only)**. |
-| **MCP connector** | Use your brains from **Codex, Claude Code and Gemini CLI**. |
+| **Files** tab | Tiles: **Upload files**, **Upload folder**, **Upload zip** (unpacked into the brain), **New folder**; drag & drop; a summary (documents, in the brain, new, size, waiting). Uploads are copied in; originals never change. |
+| **Build Brain** | Reads the documents, researches online, writes Concepts/Entities/Workstreams pages, and **names every document by what it is** (date – from – what – reference) with a one-line description. Everything goes to **Pending**. |
+| **Pending approval** | Shows the new pages, the proposed document names, the quote check and the checker's verdict. **Approve** puts pages in and renames the uploaded copies (citations follow the new names); **↩ Undo renames** puts names back. Linked PC folders are never renamed; their names are only shown. |
+| **Overview** tab | Ask questions (🎤 mic), answers with sources, 🔊 read aloud, ⬇ download. |
+| **Brain** tab | Page cards, the globe, Pending approval. |
+| **⚙ Settings** (sidebar) | Your agent's **name, tone, answer length, voice**; the AI team defaults; update check; storage location; **AI status** (installed / signed in / connected). |
+| **🔌 Connectors** | **Connect** buttons for Codex, Claude Code and Gemini (MCP); copy-paste setup for others; **link Google Drive / OneDrive folders** to a brain; **custom MCP connectors** (URL or command), switched on per brain. Gmail, Outlook, GitHub, Slack, Notion: not built in yet (use a custom MCP connector). |
+| **🧩 Skills** | Timeline, Contradiction finder, People & companies, Letter summary, Evidence table, plus your own. Run on any brain; the report is saved to Downloads. Read-only. |
+| **🔁 Workflows** | Chains that run by themselves: "New files → Build → Check → Notify", "Weekly summary report", or your own. Builds still wait for your approval. |
+| **⬇ Downloads** | Every brain zip and skill report, also saved in `H:\KastoBrain\Downloads`. |
+| **MCP connector** | Your AI apps can read your brains and start Build Brain; they can't approve, delete or move anything. |
 
 **AI team (per brain, Settings → Context):** each job can use a different AI, on the plans you already have. No API keys, no extra charges.
 

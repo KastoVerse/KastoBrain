@@ -11,6 +11,7 @@ Usage:
 """
 
 import argparse
+import shutil
 import os
 import json
 import tempfile
@@ -23,6 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
+import appconf
 import brain
 import dream
 import pc_sorter
@@ -34,9 +36,11 @@ RUNNING = {}          # project -> list of log lines while a build runs
 LAST_PING = [time.time()]   # last time an open app window said "still here"
 CODE = Path(__file__).resolve().parent.parent   # the KastoBrain program folder (a git clone)
 ASKING = set()        # projects with a question being answered
+SKILLS_RUNNING = {}   # project -> skill name while a skill runs
+CACHE = {}            # slow checks (AI status, update check) cached for a few minutes
 
 EDITABLE = {"description", "instructions", "links", "ai", "ai_ask", "ai_check", "memory", "never_send", "folders",
-            "personality"}
+            "personality", "connectors"}
 
 
 def project_dir(name):
@@ -81,13 +85,16 @@ def list_folder(pdir, folder):
         return {"error": "folder not found"}
     seen_file = pdir / "processed.json"
     seen = set(json.loads(seen_file.read_text(encoding="utf-8"))) if seen_file.exists() else set()
+    di = pdir / "docinfo.json"
+    docinfo = {k: {"title": v.get("name", ""), "description": v.get("description", ""), "original": v.get("original", "")}
+               for k, v in (json.loads(di.read_text(encoding="utf-8")) if di.exists() else {}).items()}
     entries = []
     for e in sorted(target.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
         try:
             st = e.stat()
         except OSError:
             continue
-        item = {"name": e.name, "path": str(e), "dir": e.is_dir(),
+        item = {"name": e.name, "path": str(e), "dir": e.is_dir(), **docinfo.get(str(e), {}),
                 "never_send": dream.under(e, settings.get("never_send", []))}
         if not e.is_dir():
             item.update(size=st.st_size, mtime=int(st.st_mtime),
@@ -99,6 +106,149 @@ def list_folder(pdir, folder):
     in_own = target == own.resolve() or own.resolve() in target.parents
     return {"path": str(target), "parent": parent, "entries": entries, "in_own": in_own,
             "own_rel": str(target.relative_to(own.resolve())) if in_own else ""}
+
+
+def files_summary(pdir):
+    s = brain.settings(pdir)
+    docs, missing = dream.scan_documents(s, pdir)
+    seen_file = pdir / "processed.json"
+    seen = set(json.loads(seen_file.read_text(encoding="utf-8"))) if seen_file.exists() else set()
+    in_brain = sum(1 for d in docs if dream.doc_key(d) in seen)
+    return {"documents": len(docs), "in_brain": in_brain, "new": len(docs) - in_brain,
+            "bytes": sum(d["size"] for d in docs), "missing_folders": missing,
+            "pending": sum(1 for r in brain.pending_runs(pdir) if r["status"] == "pending")}
+
+
+def unzip_into(pdir, rel_dir, zip_name, data_path):
+    """Unpack an uploaded zip into the brain's Files folder. Never overwrites; refuses paths that escape."""
+    base = brain.safe_child(pdir / "Files", rel_dir)
+    if base is None:
+        raise ValueError("bad folder")
+    dest = base / Path(zip_name).stem
+    n = 1
+    while dest.exists():
+        n += 1
+        dest = base / f"{Path(zip_name).stem} ({n})"
+    count = 0
+    with zipfile.ZipFile(data_path) as z:
+        for info in z.infolist():
+            if info.is_dir():
+                continue
+            target = brain.safe_child(dest, info.filename.replace("\\", "/"))
+            if target is None:
+                continue                                  # skip anything trying to escape the folder
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with z.open(info) as src, open(target, "wb") as out:
+                shutil.copyfileobj(src, out)
+            count += 1
+    return {"folder": str(dest), "files": count}
+
+
+def cached(key, seconds, fn):
+    hit = CACHE.get(key)
+    if hit and time.time() - hit[0] < seconds:
+        return hit[1]
+    val = fn()
+    CACHE[key] = (time.time(), val)
+    return val
+
+
+def status():
+    code, ver = git("rev-parse", "--short", "HEAD")
+    app = appconf.load_settings(ROOT)
+    upd = cached("update", 1800, update_status) if app.get("update_check", True) else {"available": False, "off": True}
+    ais = CACHE.get("ai", (0, None))[1]
+    return {"version": ver if not code else "unknown", "update": upd,
+            "unread": sum(1 for n in appconf.list_notifications(ROOT) if not n.get("read")),
+            "agents": None if ais is None else {"installed": sum(a["installed"] for a in ais),
+                                                "connected": sum(1 for a in ais if a["mcp"])},
+            "busy": {"building": list(RUNNING), "skills": SKILLS_RUNNING}}
+
+
+def start_skill(name, skill_id):
+    if name in SKILLS_RUNNING:
+        return False
+    sk = next((k for k in appconf.list_skills(ROOT) if k.get("id") == skill_id), None)
+    if not sk:
+        raise ValueError("skill not found")
+    SKILLS_RUNNING[name] = sk["name"]
+
+    def work():
+        try:
+            r = brain.run_skill(project_dir(name), sk)
+            appconf.notify(ROOT, f"{sk['name']} finished for {name}" + ("" if r["ok"] else " (with problems)"),
+                           "ok" if r["ok"] else "warn", name)
+        except Exception as e:
+            appconf.notify(ROOT, f"{sk['name']} failed for {name}: {e}", "warn", name)
+        finally:
+            SKILLS_RUNNING.pop(name, None)
+    threading.Thread(target=work, daemon=True).start()
+    return True
+
+
+def run_workflow(wf, reason="manual"):
+    """Run one workflow's steps in the background. Builds only ever go to Pending."""
+    name = wf.get("brain")
+    if not project_dir(name):
+        appconf.notify(ROOT, f"Workflow '{wf['name']}': brain '{name}' not found", "warn")
+        return False
+
+    def work():
+        done = []
+        for step in wf.get("steps", []):
+            try:
+                if step == "build":
+                    if name in RUNNING:
+                        continue
+                    RUNNING[name] = []
+                    try:
+                        c = dream.build(ROOT, name, log=RUNNING[name].append)
+                        done.append(f"Build Brain: {c['status']}" + (f", checker {c['checker']['verdict']}" if c.get("checker") else ""))
+                    finally:
+                        RUNNING.pop(name, None)
+                elif step.startswith("skill:"):
+                    sk = next((k for k in appconf.list_skills(ROOT) if k.get("id") == step[6:]), None)
+                    if sk:
+                        SKILLS_RUNNING[name] = sk["name"]
+                        try:
+                            r = brain.run_skill(project_dir(name), sk)
+                            done.append(f"{sk['name']}: report saved to Downloads" if r["ok"] else f"{sk['name']}: problems")
+                        finally:
+                            SKILLS_RUNNING.pop(name, None)
+            except Exception as e:
+                done.append(f"{step}: failed ({e})")
+        items = appconf.list_workflows(ROOT)
+        for w in items:
+            if w["id"] == wf["id"]:
+                w["last_run"] = time.strftime("%Y-%m-%d %H:%M")
+        appconf.save_workflows(ROOT, items)
+        if wf.get("notify", True):
+            appconf.notify(ROOT, f"Workflow '{wf['name']}' ({reason}) on {name}: " + ("; ".join(done) or "nothing to do"),
+                           "ok", name)
+    threading.Thread(target=work, daemon=True).start()
+    return True
+
+
+def workflow_tick():
+    """Called every minute by the scheduler."""
+    now = time.time()
+    for wf in appconf.list_workflows(ROOT):
+        if not wf.get("enabled") or not project_dir(wf.get("brain", "")):
+            continue
+        last = wf.get("last_run") or ""
+        try:
+            last_t = time.mktime(time.strptime(last, "%Y-%m-%d %H:%M")) if last else 0
+        except ValueError:
+            last_t = 0
+        if wf["trigger"] == "daily" and now - last_t >= 86400:
+            run_workflow(wf, "daily")
+        elif wf["trigger"] == "weekly" and now - last_t >= 7 * 86400:
+            run_workflow(wf, "weekly")
+        elif wf["trigger"] == "new_files" and now - last_t >= 600:
+            pdir = project_dir(wf["brain"])
+            if wf["brain"] not in RUNNING and files_summary(pdir)["new"] > 0 and not any(
+                    r["status"] == "pending" for r in brain.pending_runs(pdir)):
+                run_workflow(wf, "new files")
 
 
 def allowed_download(pdir, path):
@@ -197,6 +347,10 @@ def scheduler():
     last = {}
     while True:
         time.sleep(60)
+        try:
+            workflow_tick()
+        except Exception as e:
+            appconf.notify(ROOT, f"Workflow check failed: {e}", "warn")
         for name in list_projects():
             try:
                 sched = json.loads((ROOT / "Projects" / name / "settings.json").read_text(
@@ -250,7 +404,32 @@ class Handler(BaseHTTPRequestHandler):
             LAST_PING[0] = time.time()
             return self.send_json({"ok": True})
         if path == "/api/update":
-            return self.send_json(update_status())
+            CACHE.pop("update", None)
+            return self.send_json(cached("update", 1800, update_status))
+        if path == "/api/status":
+            return self.send_json(status())
+        if path == "/api/app-settings":
+            return self.send_json({"settings": appconf.load_settings(ROOT), "root": str(ROOT),
+                                   "mcp_command": appconf.mcp_command(ROOT)})
+        if path == "/api/ai-status":
+            if query.get("refresh"):
+                CACHE.pop("ai", None)
+            return self.send_json({"ais": cached("ai", 600, appconf.ai_status)})
+        if path == "/api/skills":
+            return self.send_json({"skills": appconf.list_skills(ROOT)})
+        if path == "/api/workflows":
+            return self.send_json({"workflows": appconf.list_workflows(ROOT), "templates": appconf.WORKFLOW_TEMPLATES})
+        if path == "/api/notifications":
+            return self.send_json({"items": appconf.list_notifications(ROOT, mark_read=bool(query.get("read")))})
+        if path == "/api/downloads":
+            reports = [dict(r, brain=n) for n in list_projects() for r in brain.list_reports(project_dir(n))]
+            return self.send_json({"files": appconf.list_downloads(ROOT), "folder": str(appconf.downloads_dir(ROOT)),
+                                   "reports": reports})
+        if path == "/api/downloads/file":
+            f = appconf.downloads_dir(ROOT) / Path(query.get("name", [""])[0]).name
+            if not f.is_file():
+                return self.send_json({"error": "not found"}, 404)
+            return self.send_file(f, f.name)
         if path == "/" or path == "/index.html":
             body = (WEB / "index.html").read_bytes()
             self.send_response(200)
@@ -289,8 +468,12 @@ class Handler(BaseHTTPRequestHandler):
                 if not allowed_download(pdir, target):
                     return self.send_json({"error": "not allowed"}, 403)
                 return self.send_file(target, Path(target).name)
+            if what == "summary":
+                return self.send_json(files_summary(pdir))
+            if what == "reports":
+                return self.send_json({"reports": brain.list_reports(pdir), "running": SKILLS_RUNNING.get(name)})
             if what == "export":
-                tmp = Path(tempfile.gettempdir()) / f"kastobrain-export-{pdir.name}.zip"
+                tmp = appconf.downloads_dir(ROOT) / f"{pdir.name} brain {time.strftime('%Y-%m-%d %H%M')}.zip"
                 with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:
                     for f in pdir.rglob("*"):
                         if f.is_file():
@@ -336,6 +519,55 @@ class Handler(BaseHTTPRequestHandler):
                         SORTING.pop("log", None)
                 threading.Thread(target=work, daemon=True).start()
                 return self.send_json({"started": True})
+            if path == "/api/app-settings":
+                return self.send_json({"settings": appconf.save_settings(ROOT, read_body(self))})
+            if path == "/api/mcp/connect":
+                b = read_body(self)
+                ok, msg = appconf.mcp_connect(ROOT, b.get("key", ""), bool(b.get("connect", True)))
+                CACHE.pop("ai", None)
+                return self.send_json({"ok": ok, "message": msg})
+            if path == "/api/skills":
+                return self.send_json({"skill": appconf.save_skill(ROOT, read_body(self))})
+            if path == "/api/skills/delete":
+                return self.send_json({"ok": appconf.delete_skill(ROOT, read_body(self).get("id", ""))})
+            if path == "/api/workflows":
+                return self.send_json({"workflows": appconf.save_workflows(ROOT, read_body(self).get("workflows", []))})
+            if path == "/api/workflows/run":
+                wid = read_body(self).get("id")
+                wf = next((w for w in appconf.list_workflows(ROOT) if w["id"] == wid), None)
+                return self.send_json({"started": bool(wf) and run_workflow(wf)})
+            if path.startswith("/api/project/") and "/skill/" in path:
+                name, sid = path[len("/api/project/"):].split("/skill/", 1)
+                if not project_dir(name):
+                    return self.send_json({"error": "brain not found"}, 404)
+                return self.send_json({"started": start_skill(project_dir(name).name, sid)})
+            if path.startswith("/api/project/") and "/undo-names/" in path:
+                name, run = path[len("/api/project/"):].split("/undo-names/", 1)
+                if not project_dir(name):
+                    return self.send_json({"error": "brain not found"}, 404)
+                return self.send_json({"undone": dream.undo_names(ROOT, project_dir(name).name, Path(run).name,
+                                                                  log=lambda *_: None)})
+            if path.startswith("/api/project/") and path.endswith("/unzip"):
+                pdir = project_dir(path[len("/api/project/"):-len("/unzip")])
+                if not pdir:
+                    return self.send_json({"error": "brain not found"}, 404)
+                q = parse_qs(urlsplit(self.path).query)
+                tmp = Path(tempfile.gettempdir()) / f"kb-upload-{time.time_ns()}.zip"
+                length = int(self.headers.get("Content-Length", 0))
+                with open(tmp, "wb") as out:
+                    left = length
+                    while left > 0:
+                        chunk = self.rfile.read(min(left, 1 << 20))
+                        if not chunk:
+                            break
+                        out.write(chunk)
+                        left -= len(chunk)
+                try:
+                    return self.send_json(unzip_into(pdir, q.get("dir", [""])[0], q.get("name", ["upload.zip"])[0], tmp))
+                except zipfile.BadZipFile:
+                    return self.send_json({"error": "That file is not a valid zip."}, 400)
+                finally:
+                    tmp.unlink(missing_ok=True)
             if path.startswith("/api/project/") and (path.endswith("/upload") or path.endswith("/mkdir")):
                 name, what = path[len("/api/project/"):].rsplit("/", 1)
                 pdir = project_dir(name)
