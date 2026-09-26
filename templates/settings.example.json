@@ -12,7 +12,7 @@
   "links": [
     "https://www.example.gov.au"
   ],
-  "ai": "claude",
+  "ai": "chatgpt",
   "memory": {
     "update_schedule": "off",
     "auto_update_summary": false,

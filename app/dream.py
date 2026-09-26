@@ -44,7 +44,8 @@ Follow these phases in order.
    the document list (NEW/CHANGED ones first) and the stopping conditions.
    Read ./wiki/index.md and any existing pages you will touch.
 
-2. SUMMARISE. Read each NEW or CHANGED document. Understand what it says,
+2. SUMMARISE. Read each session listed in the brief (a question and answer
+   you gave before; corrections in them matter most). Read each NEW or CHANGED document. Understand what it says,
    who and what it involves, dates, amounts, reference numbers.
 
 3. ATTACH FACTS TO SUBJECTS. Decide the subjects yourself:
@@ -103,6 +104,12 @@ def doc_key(d):
     return hashlib.sha1(f"{d['path']}|{d['size']}|{d['mtime']}".encode()).hexdigest()
 
 
+def new_sessions(pdir):
+    seen_file = pdir / "sessions_processed.json"
+    seen = set(json.loads(seen_file.read_text(encoding="utf-8"))) if seen_file.exists() else set()
+    return sorted(p.name for p in (pdir / "sessions").glob("*.json") if p.name not in seen)
+
+
 def write_brief(pdir, settings, docs, seen):
     deletions = pdir / "deletions.md"
     deletion_text = deletions.read_text(encoding="utf-8") if deletions.exists() else "(none)"
@@ -121,6 +128,8 @@ def write_brief(pdir, settings, docs, seen):
         "", "## Deletion log (never re-create these)", deletion_text,
         "", f"## Documents: NEW or CHANGED ({len(new)})", *bullets(d["path"] for d in new),
         "", f"## Documents: already processed ({len(old)})", *bullets(d["path"] for d in old),
+        "", "## Sessions to summarise (questions asked since the last approved run)",
+        *bullets(str(pdir / "sessions" / n) for n in new_sessions(pdir)),
         "", "## Stopping conditions",
         "- Stop when every NEW or CHANGED document has been read and its facts filed.",
         "- Do not rewrite pages that are already correct.",
@@ -139,19 +148,30 @@ def list_pages(wiki):
     return out
 
 
-def run_ai(ai, workdir, prompt, folders):
+def run_ai(ai, workdir, prompt, folders, write=True):
+    """Run one AI job on your own plan. write=False means read-only (for Ask)."""
     if os.environ.get("KASTOBRAIN_TEST_AI"):
-        cmd = [sys.executable, os.environ["KASTOBRAIN_TEST_AI"]]
+        cmd = [sys.executable, os.environ["KASTOBRAIN_TEST_AI"], prompt]
     elif ai == "chatgpt":
-        cmd = ["codex", "exec", "--skip-git-repo-check", "--sandbox", "workspace-write", prompt]
+        cmd = ["codex", "exec", "--skip-git-repo-check",
+               "--sandbox", "workspace-write" if write else "read-only", prompt]
+    elif ai == "gemini":
+        cmd = ["gemini", "-p", prompt, "--approval-mode", "auto_edit" if write else "default"]
+        for f in folders:
+            cmd += ["--include-directories", f]
     else:
-        cmd = ["claude", "-p", prompt, "--permission-mode", "acceptEdits",
-               "--allowedTools", "Read,Glob,Grep,Write,Edit,WebSearch,WebFetch"]
+        tools = "Read,Glob,Grep,WebSearch,WebFetch" + (",Write,Edit" if write else "")
+        cmd = ["claude", "-p", prompt, "--allowedTools", tools]
+        if write:
+            cmd += ["--permission-mode", "acceptEdits"]
         for f in folders:
             cmd += ["--add-dir", f]
     exe = shutil.which(cmd[0]) or cmd[0]
-    proc = subprocess.run([exe] + cmd[1:], cwd=workdir, stdin=subprocess.DEVNULL, capture_output=True, text=True,
-                          encoding="utf-8", errors="replace")
+    try:
+        proc = subprocess.run([exe] + cmd[1:], cwd=workdir, stdin=subprocess.DEVNULL, capture_output=True,
+                              text=True, encoding="utf-8", errors="replace")
+    except FileNotFoundError:
+        return 127, f"{cmd[0]} is not installed or not on PATH."
     return proc.returncode, proc.stdout + ("\n" + proc.stderr if proc.stderr.strip() else "")
 
 
@@ -179,18 +199,19 @@ def build(root, name, log=print):
     (rdir / "BRIEF.md").write_text(write_brief(pdir, settings, docs, seen), encoding="utf-8")
     log("  brief written, wiki copied to pending; starting Dream …")
 
-    code, output = run_ai(settings.get("ai", "claude"), rdir, DREAM_PROMPT.format(name=name),
-                          settings.get("folders", []))
+    code, output = run_ai(settings.get("ai", "chatgpt"), rdir, DREAM_PROMPT.format(name=name),
+                          settings.get("folders", []) + [str(pdir / "sessions")])
     (rdir / "dream-output.txt").write_text(output, encoding="utf-8")
 
     before, after = list_pages(wiki), list_pages(rdir / "wiki")
     changes = {
-        "run": run, "project": name, "ai": settings.get("ai", "claude"), "exit_code": code,
+        "run": run, "project": name, "ai": settings.get("ai", "chatgpt"), "exit_code": code,
         "documents": len(docs), "new_or_changed": new_count,
         "added": sorted(k for k in after if k not in before),
         "changed": sorted(k for k in after if k in before and after[k] != before[k]),
         "removed": sorted(k for k in before if k not in after),
         "doc_keys": [doc_key(d) for d in docs],
+        "sessions": new_sessions(pdir),
         "status": "pending" if code == 0 else "failed",
     }
     if code == 0 and not (changes["added"] or changes["changed"] or changes["removed"]):
@@ -217,6 +238,9 @@ def approve(root, name, run, log=print):
         with open(pdir / "deletions.md", "a", encoding="utf-8") as f:
             f.write(f"- {p} (removed in run {run})\n")
     (pdir / "processed.json").write_text(json.dumps(changes["doc_keys"]), encoding="utf-8")
+    sp = pdir / "sessions_processed.json"
+    done = set(json.loads(sp.read_text(encoding="utf-8"))) if sp.exists() else set()
+    sp.write_text(json.dumps(sorted(done | set(changes.get("sessions", [])))), encoding="utf-8")
     changes["status"] = "approved"
     (rdir / "changes.json").write_text(json.dumps(changes, indent=2), encoding="utf-8")
     log(f"Approved {run}: wiki updated. Previous wiki kept as wiki.previous.")

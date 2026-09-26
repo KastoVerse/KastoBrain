@@ -19,33 +19,25 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
+import brain
 import dream
+import pc_sorter
 
 WEB = Path(__file__).resolve().parent / "web"
 ROOT = None
 
 RUNNING = {}          # project -> list of log lines while a build runs
+ASKING = set()        # projects with a question being answered
 
 EDITABLE = {"description", "instructions", "links", "ai", "memory", "never_send", "folders"}
 
 
 def project_dir(name):
-    projects = (ROOT / "Projects").resolve()
-    path = (projects / name).resolve()
-    if path.parent != projects or not (path / "settings.json").is_file():
-        return None
-    return path
+    return brain.project_dir(ROOT, name)
 
 
 def list_projects():
-    projects = ROOT / "Projects"
-    if not projects.is_dir():
-        return []
-    out = []
-    for p in sorted(projects.iterdir()):
-        if (p / "settings.json").is_file():
-            out.append(p.name)
-    return out
+    return brain.list_projects(ROOT)
 
 
 def start_build(name):
@@ -98,35 +90,32 @@ def list_folder(pdir, folder):
 
 
 def pending_runs(pdir):
-    out = []
-    pend = pdir / "pending"
-    if pend.is_dir():
-        for r in sorted(pend.iterdir(), reverse=True):
-            c = r / "changes.json"
-            if c.is_file():
-                data = json.loads(c.read_text(encoding="utf-8"))
-                data.pop("doc_keys", None)
-                out.append(data)
-    return out
+    return brain.pending_runs(pdir)
 
 
 def wiki_pages(pdir):
-    pages = []
-    for cat in dream.CATEGORIES:
-        d = pdir / "wiki" / cat
-        if not d.is_dir():
-            continue
-        for p in sorted(d.glob("*.md")):
-            text = p.read_text(encoding="utf-8")
-            meta = {}
-            if text.startswith("---"):
-                for line in text.split("---", 2)[1].splitlines():
-                    if ":" in line:
-                        k, v = line.split(":", 1)
-                        meta[k.strip()] = v.split("#")[0].strip()
-            pages.append({"category": cat, "file": p.name, "title": meta.get("title", p.stem),
-                          "summary": meta.get("summary", ""), "updated": meta.get("updated", ""), "text": text})
-    return pages
+    return brain.wiki_pages(pdir)
+
+
+def pc_brain_overview():
+    rows = []
+    for name in list_projects():
+        pdir = project_dir(name)
+        s = brain.settings(pdir)
+        rows.append({"name": name, "description": s.get("description", ""), "ai": s.get("ai", ""),
+                     "pages": len(wiki_pages(pdir)),
+                     "pending": sum(1 for r in pending_runs(pdir) if r["status"] == "pending"),
+                     "sessions": len(list(pdir.glob("sessions/*.json"))), "folders": s.get("folders", [])})
+    return {"brains": rows, "sorter": pc_sorter.load_settings(ROOT), "plans": pc_sorter.list_plans(ROOT),
+            "sorting": SORTING.get("log")}
+
+
+SORTING = {}
+
+
+def read_body(handler):
+    length = int(handler.headers.get("Content-Length", 0))
+    return json.loads(handler.rfile.read(length) or b"{}")
 
 
 def scheduler():
@@ -174,6 +163,12 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
         elif path == "/api/projects":
             self.send_json({"root": str(ROOT), "projects": list_projects()})
+        elif path == "/api/pcbrain":
+            self.send_json(pc_brain_overview())
+        elif path == "/api/search":
+            q = query.get("q", [""])[0]
+            self.send_json({"hits": [dict(h, brain=n) for n in list_projects()
+                                     for h in brain.search(project_dir(n), q, 10)] if q.strip() else []})
         elif path.startswith("/api/project/") and path.count("/") == 4:
             name, what = path[len("/api/project/"):].split("/")
             pdir = project_dir(name)
@@ -181,6 +176,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "project not found"}, 404)
             if what == "pages":
                 return self.send_json({"pages": wiki_pages(pdir)})
+            if what == "sessions":
+                return self.send_json({"sessions": brain.list_sessions(pdir), "asking": name in ASKING})
             if what == "files":
                 return self.send_json(list_folder(pdir, query.get("path", [""])[0]))
             if what == "pending":
@@ -197,6 +194,40 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = unquote(self.path.split("?")[0])
+        try:
+            if path == "/api/projects":
+                return self.send_json({"created": brain.create_project(ROOT, read_body(self).get("name", ""))})
+            if path == "/api/pcbrain/settings":
+                return self.send_json({"saved": pc_sorter.save_settings(ROOT, read_body(self))})
+            if path == "/api/pcbrain/dryrun":
+                if "log" in SORTING:
+                    return self.send_json({"started": False})
+                SORTING["log"] = []
+
+                def work():
+                    try:
+                        pc_sorter.dry_run(ROOT, log=SORTING["log"].append)
+                    except Exception as e:
+                        SORTING["log"].append(f"Dry run failed: {e}")
+                    finally:
+                        time.sleep(2)
+                        SORTING.pop("log", None)
+                threading.Thread(target=work, daemon=True).start()
+                return self.send_json({"started": True})
+            if path.startswith("/api/project/") and path.endswith("/ask"):
+                pdir = project_dir(path[len("/api/project/"):-len("/ask")])
+                question = read_body(self).get("question", "").strip()
+                if not pdir or not question:
+                    return self.send_json({"error": "brain or question missing"}, 400)
+                if pdir.name in ASKING:
+                    return self.send_json({"error": "already answering a question for this brain"}, 409)
+                ASKING.add(pdir.name)
+                try:
+                    return self.send_json({"session": brain.ask(pdir, question)})
+                finally:
+                    ASKING.discard(pdir.name)
+        except ValueError as e:
+            return self.send_json({"error": str(e)}, 400)
         parts = path[len("/api/project/"):].split("/") if path.startswith("/api/project/") else []
         if len(parts) >= 2 and parts[1] in ("build", "approve", "reject"):
             pdir = project_dir(parts[0])

@@ -84,6 +84,15 @@
   .tag.skip { color:var(--dim); border:1px solid var(--line); }
   .crumbs { font-size:12px; color:var(--dim); margin-bottom:10px; word-break:break-all; }
   .crumbs a { color:var(--silver); cursor:pointer; }
+  .ask { display:flex; gap:10px; margin-bottom:18px; }
+  .ask textarea { min-height:48px; }
+  .sess { border:1px solid var(--line); border-radius:9px; padding:12px; margin-bottom:10px; background:rgba(38,36,46,.7); }
+  .sess .q { color:var(--gold); font-weight:600; margin-bottom:6px; }
+  .sess .a { white-space:pre-wrap; font-size:13px; }
+  .sess .m { color:var(--dim); font-size:11px; margin-top:6px; }
+  table.pc { width:100%; border-collapse:collapse; font-size:13px; margin-bottom:22px; }
+  table.pc td, table.pc th { padding:7px 8px; border-bottom:1px solid var(--line); text-align:left; }
+  table.pc th { color:var(--dim); font-weight:500; font-size:12px; }
   .globe-wrap { margin-top:18px; border-radius:12px; background:radial-gradient(circle at 50% 50%, rgba(94,43,138,.40), rgba(94,43,138,.12) 55%, transparent 75%); }
   .globe-wrap canvas { display:block; width:100%; cursor:grab; }
   .legend { display:flex; flex-wrap:wrap; gap:10px; font-size:11px; color:var(--dim); padding:4px 6px 8px; }
@@ -124,11 +133,12 @@
 <aside>
   <div class="logo">KastoBrain<span class="sparkle" style="left:-4px;top:2px"></span><span class="sparkle" style="right:-6px;top:-2px;animation-delay:1.1s"></span><span class="sparkle" style="left:48%;bottom:-3px;animation-delay:2s"></span></div>
   <h4>PC Brain</h4>
-  <div class="nav muted">PC Brain (coming in step 10)</div>
+  <a class="nav" id="pcNav">PC Brain</a>
   <h4>Projects</h4>
   <div id="projects"></div>
+  <a class="nav muted" id="newBrain">+ New brain</a>
   <h4>Sessions</h4>
-  <div class="nav muted">None yet</div>
+  <div id="sessNav"><div class="nav muted">None yet</div></div>
 </aside>
 <main id="main"><div class="muted">Loading…</div></main>
 
@@ -148,13 +158,107 @@ async function loadProjects() {
     return;
   }
   box.innerHTML = r.projects.map(p => `<a class="nav" data-p="${esc(p)}">${esc(p)}</a>`).join("");
-  box.querySelectorAll("[data-p]").forEach(a => a.onclick = () => { state.filesPath = ""; openProject(a.dataset.p); });
+  box.querySelectorAll("[data-p]").forEach(a => a.onclick = () => { async function renderOverview(body) {
+  const d = await fetch(`/api/project/${encodeURIComponent(state.project)}/sessions`).then(r => r.json());
+  const list = d.sessions.map(x => `<div class="sess"><div class="q">${esc(x.question)}</div>
+    <div class="a">${esc(x.answer)}</div><div class="m">${esc(x.time)} · ${esc(x.ai)} · ${x.seconds}s${x.ok ? "" : " · failed"}</div></div>`).join("");
+  body.innerHTML = `<div class="body"><div class="panel" style="max-width:900px">
+    <h3>Ask this brain</h3><p class="hint">${esc(state.settings.description)} Answers come from the wiki with sources. Read-only: asking never changes anything.</p>
+    <div class="ask"><textarea id="q" placeholder="Ask a question…"></textarea><button class="build" id="askBtn" style="margin:0">Ask</button></div>
+    <div class="status" id="askSt" style="margin:-8px 0 12px"></div>
+    <h3>Sessions</h3><p class="hint">Every question is kept. Build Brain learns from them on its next run.</p>
+    ${list || '<div class="placeholder">No questions yet.</div>'}</div></div>`;
+  document.getElementById("askBtn").onclick = async () => {
+    const q = document.getElementById("q").value.trim(); if (!q) return;
+    const st = document.getElementById("askSt"); st.className = "status building"; st.textContent = "Thinking… (this can take a minute or two)";
+    const r = await fetch(`/api/project/${encodeURIComponent(state.project)}/ask`, { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: q }) }).then(r => r.json());
+    if (r.error) { st.className = "status"; st.textContent = r.error; return; }
+    render(); loadSessNav();
+  };
+  loadSessNav();
+}
+
+async function loadSessNav() {
+  if (!state.project) return;
+  const d = await fetch(`/api/project/${encodeURIComponent(state.project)}/sessions`).then(r => r.json());
+  document.getElementById("sessNav").innerHTML = d.sessions.slice(0, 12).map(x =>
+    `<a class="nav" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" data-sess>${esc(x.question)}</a>`).join("")
+    || '<div class="nav muted">None yet</div>';
+  document.querySelectorAll("[data-sess]").forEach(a => a.onclick = () => { state.tab = "Overview"; render(); });
+}
+
+async function renderPC() {
+  state.view = "pc";
+  document.querySelectorAll("[data-p]").forEach(a => a.classList.remove("on"));
+  document.getElementById("pcNav").classList.add("on");
+  const d = await fetch("/api/pcbrain").then(r => r.json());
+  const rows = d.brains.map(b => `<tr><td><a class="nav" style="display:inline;padding:0" data-open="${esc(b.name)}">${esc(b.name)}</a><div class="muted" style="font-size:11px">${esc(b.description)}</div></td>
+    <td>${b.pages}</td><td>${b.pending}</td><td>${b.sessions}</td><td>${esc(b.ai || "chatgpt")}</td></tr>`).join("");
+  const plan = d.plans[0];
+  const planHtml = plan ? `<div class="run"><b>Dry run ${esc(plan.id)}</b> <span class="muted">· ${plan.scanned} files scanned · ${plan.suggestions} suggestions ${esc(JSON.stringify(plan.by_reason))}</span>
+      <ul>${plan.items.slice(0, 60).map(i => `<li>${esc(i.reason)}: ${esc(i.file)}${i.keep ? ` <span class="muted">(keep ${esc(i.keep)})</span>` : ""}</li>`).join("") || "<li>No suggestions.</li>"}</ul>
+      ${plan.items.length > 60 ? `<p class="hint">Showing 60. Full list in PC-Brain\\sorter-plans\\${esc(plan.id)}.csv</p>` : ""}
+      ${plan.errors.length ? `<p class="hint">${plan.errors.length} problems (e.g. ${esc(plan.errors[0])})</p>` : ""}</div>` : '<div class="placeholder">No dry run yet.</div>';
+  document.getElementById("main").innerHTML = `
+    <div class="crumb">PC Brain</div>
+    <div class="title"><div class="dot">PC</div>PC Brain</div>
+    <div class="tabs"><div class="tab on">Overview</div></div>
+    <div class="body"><div class="panel" style="max-width:1000px">
+      <h3>All brains</h3><p class="hint">The PC Brain oversees every project brain.</p>
+      <table class="pc"><tr><th>Brain</th><th>Pages</th><th>Pending</th><th>Sessions</th><th>AI</th></tr>${rows || '<tr><td colspan="5" class="muted">No brains yet.</td></tr>'}</table>
+      <h3>Search every brain</h3><p class="hint">Plain text search across all wiki pages.</p>
+      <div class="ask"><input type="text" id="sq" placeholder="Search…"><button id="sBtn">Search</button></div><div id="sRes"></div>
+      <h3 style="margin-top:22px">PC sorter (dry run only)</h3>
+      <p class="hint">Scans the folders below and SUGGESTS duplicates, empty and junk files for the "FOR REVIEW – TO DELETE" folder. It never moves, renames or deletes anything.</p>
+      <div class="section"><p class="hint">Folders to scan (one per line)</p><textarea id="scan">${esc(d.sorter.scan_folders.join("\n"))}</textarea>
+      <p class="hint" style="margin-top:8px">Folders to skip (one per line)</p><textarea id="skip">${esc(d.sorter.skip_folders.join("\n"))}</textarea>
+      <div style="margin-top:10px"><button id="sSave">Save folders</button> <button class="build" id="dry" style="margin-left:6px">Dry run</button><span class="status" id="dSt"></span></div></div>
+      <h3>Latest dry run</h3>${planHtml}
+    </div></div>`;
+  document.querySelectorAll("[data-open]").forEach(a => a.onclick = () => openProject(a.dataset.open));
+  document.getElementById("sBtn").onclick = async () => {
+    const q = document.getElementById("sq").value; const r = await fetch("/api/search?q=" + encodeURIComponent(q)).then(r => r.json());
+    document.getElementById("sRes").innerHTML = r.hits.map(h => `<div class="run" style="padding:8px"><b>${esc(h.brain)} / ${esc(h.page)}</b> <span class="muted">${esc(h.category)}</span><div style="font-size:12px">${esc(h.text)}</div></div>`).join("") || '<p class="hint">No matches.</p>';
+  };
+  const lines = id => document.getElementById(id).value.split("\n").map(x => x.trim()).filter(Boolean);
+  document.getElementById("sSave").onclick = async () => {
+    await fetch("/api/pcbrain/settings", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scan_folders: lines("scan"), skip_folders: lines("skip") }) });
+    document.getElementById("dSt").textContent = "Saved.";
+  };
+  document.getElementById("dry").onclick = async () => {
+    await fetch("/api/pcbrain/dryrun", { method: "POST" }); pollDry();
+  };
+  if (d.sorting) pollDry();
+}
+
+async function pollDry() {
+  const d = await fetch("/api/pcbrain").then(r => r.json());
+  const st = document.getElementById("dSt"); if (!st) return;
+  if (d.sorting) { st.className = "status building"; st.textContent = d.sorting[d.sorting.length - 1] || "Scanning…"; setTimeout(pollDry, 1500); }
+  else renderPC();
+}
+
+state.filesPath = ""; openProject(a.dataset.p); });
   openProject(state.project || r.projects[0]);
 }
 
+document.getElementById("newBrain").onclick = async () => {
+  const name = prompt("Name for the new brain (e.g. Insurance):");
+  if (!name) return;
+  const r = await fetch("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }) }).then(r => r.json());
+  if (r.error) return alert(r.error);
+  state.project = r.created; state.tab = "Settings"; state.sub = "Context";
+  loadProjects();
+};
+document.getElementById("pcNav").onclick = () => renderPC();
+
 async function openProject(name) {
   const r = await fetch("/api/project/" + encodeURIComponent(name)).then(r => r.json());
-  state.project = r.name; state.settings = r.settings;
+  state.project = r.name; state.settings = r.settings; state.view = "project";
+  document.getElementById("pcNav").classList.remove("on");
   document.querySelectorAll("[data-p]").forEach(a => a.classList.toggle("on", a.dataset.p === name));
   render();
 }
@@ -170,7 +274,7 @@ function render() {
   document.querySelectorAll("[data-t]").forEach(t => t.onclick = () => { state.tab = t.dataset.t; render(); });
   document.getElementById("buildBtn").onclick = startBuild;
   const body = document.getElementById("tabbody");
-  if (state.tab === "Overview") body.innerHTML = `<div class="body"><div class="panel"><h3>Overview</h3><p class="hint">${esc(s.description)}</p><div class="placeholder">Sessions history arrives in step 8.</div></div></div>`;
+  if (state.tab === "Overview") renderOverview(body);
   if (state.tab === "Files") renderFiles(body);
   if (state.tab === "Brain") renderBrain(body);
   if (state.tab === "Settings") renderSettings(body);
@@ -191,8 +295,9 @@ function renderSettings(body) {
     <div class="section"><h3>Links</h3><p class="hint">Websites to prioritise when researching (one per line).</p>
       <textarea id="links">${esc(s.links.join("\n"))}</textarea></div>
     <div class="section"><h3>AI</h3><select id="ai">
-      <option value="claude" ${s.ai === "claude" ? "selected" : ""}>Claude</option>
-      <option value="chatgpt" ${s.ai === "chatgpt" ? "selected" : ""}>ChatGPT / Codex</option></select></div>
+      <option value="chatgpt" ${(s.ai || "chatgpt") === "chatgpt" ? "selected" : ""}>ChatGPT / Codex (default)</option>
+      <option value="claude" ${s.ai === "claude" ? "selected" : ""}>Claude Code</option>
+      <option value="gemini" ${s.ai === "gemini" ? "selected" : ""}>Gemini CLI</option></select></div>
     <button id="save">Save</button><span class="status" id="st"></span>`;
   if (state.sub === "Memory") {
     const m = s.memory;
@@ -237,11 +342,175 @@ async function saveSettings() {
   else document.getElementById("st").textContent = "Not saved: " + (r.error || "error");
 }
 
+async function renderOverview(body) {
+  const d = await fetch(`/api/project/${encodeURIComponent(state.project)}/sessions`).then(r => r.json());
+  const list = d.sessions.map(x => `<div class="sess"><div class="q">${esc(x.question)}</div>
+    <div class="a">${esc(x.answer)}</div><div class="m">${esc(x.time)} · ${esc(x.ai)} · ${x.seconds}s${x.ok ? "" : " · failed"}</div></div>`).join("");
+  body.innerHTML = `<div class="body"><div class="panel" style="max-width:900px">
+    <h3>Ask this brain</h3><p class="hint">${esc(state.settings.description)} Answers come from the wiki with sources. Read-only: asking never changes anything.</p>
+    <div class="ask"><textarea id="q" placeholder="Ask a question…"></textarea><button class="build" id="askBtn" style="margin:0">Ask</button></div>
+    <div class="status" id="askSt" style="margin:-8px 0 12px"></div>
+    <h3>Sessions</h3><p class="hint">Every question is kept. Build Brain learns from them on its next run.</p>
+    ${list || '<div class="placeholder">No questions yet.</div>'}</div></div>`;
+  document.getElementById("askBtn").onclick = async () => {
+    const q = document.getElementById("q").value.trim(); if (!q) return;
+    const st = document.getElementById("askSt"); st.className = "status building"; st.textContent = "Thinking… (this can take a minute or two)";
+    const r = await fetch(`/api/project/${encodeURIComponent(state.project)}/ask`, { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: q }) }).then(r => r.json());
+    if (r.error) { st.className = "status"; st.textContent = r.error; return; }
+    render(); loadSessNav();
+  };
+  loadSessNav();
+}
+
+async function loadSessNav() {
+  if (!state.project) return;
+  const d = await fetch(`/api/project/${encodeURIComponent(state.project)}/sessions`).then(r => r.json());
+  document.getElementById("sessNav").innerHTML = d.sessions.slice(0, 12).map(x =>
+    `<a class="nav" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" data-sess>${esc(x.question)}</a>`).join("")
+    || '<div class="nav muted">None yet</div>';
+  document.querySelectorAll("[data-sess]").forEach(a => a.onclick = () => { state.tab = "Overview"; render(); });
+}
+
+async function renderPC() {
+  state.view = "pc";
+  document.querySelectorAll("[data-p]").forEach(a => a.classList.remove("on"));
+  document.getElementById("pcNav").classList.add("on");
+  const d = await fetch("/api/pcbrain").then(r => r.json());
+  const rows = d.brains.map(b => `<tr><td><a class="nav" style="display:inline;padding:0" data-open="${esc(b.name)}">${esc(b.name)}</a><div class="muted" style="font-size:11px">${esc(b.description)}</div></td>
+    <td>${b.pages}</td><td>${b.pending}</td><td>${b.sessions}</td><td>${esc(b.ai || "chatgpt")}</td></tr>`).join("");
+  const plan = d.plans[0];
+  const planHtml = plan ? `<div class="run"><b>Dry run ${esc(plan.id)}</b> <span class="muted">· ${plan.scanned} files scanned · ${plan.suggestions} suggestions ${esc(JSON.stringify(plan.by_reason))}</span>
+      <ul>${plan.items.slice(0, 60).map(i => `<li>${esc(i.reason)}: ${esc(i.file)}${i.keep ? ` <span class="muted">(keep ${esc(i.keep)})</span>` : ""}</li>`).join("") || "<li>No suggestions.</li>"}</ul>
+      ${plan.items.length > 60 ? `<p class="hint">Showing 60. Full list in PC-Brain\\sorter-plans\\${esc(plan.id)}.csv</p>` : ""}
+      ${plan.errors.length ? `<p class="hint">${plan.errors.length} problems (e.g. ${esc(plan.errors[0])})</p>` : ""}</div>` : '<div class="placeholder">No dry run yet.</div>';
+  document.getElementById("main").innerHTML = `
+    <div class="crumb">PC Brain</div>
+    <div class="title"><div class="dot">PC</div>PC Brain</div>
+    <div class="tabs"><div class="tab on">Overview</div></div>
+    <div class="body"><div class="panel" style="max-width:1000px">
+      <h3>All brains</h3><p class="hint">The PC Brain oversees every project brain.</p>
+      <table class="pc"><tr><th>Brain</th><th>Pages</th><th>Pending</th><th>Sessions</th><th>AI</th></tr>${rows || '<tr><td colspan="5" class="muted">No brains yet.</td></tr>'}</table>
+      <h3>Search every brain</h3><p class="hint">Plain text search across all wiki pages.</p>
+      <div class="ask"><input type="text" id="sq" placeholder="Search…"><button id="sBtn">Search</button></div><div id="sRes"></div>
+      <h3 style="margin-top:22px">PC sorter (dry run only)</h3>
+      <p class="hint">Scans the folders below and SUGGESTS duplicates, empty and junk files for the "FOR REVIEW – TO DELETE" folder. It never moves, renames or deletes anything.</p>
+      <div class="section"><p class="hint">Folders to scan (one per line)</p><textarea id="scan">${esc(d.sorter.scan_folders.join("\n"))}</textarea>
+      <p class="hint" style="margin-top:8px">Folders to skip (one per line)</p><textarea id="skip">${esc(d.sorter.skip_folders.join("\n"))}</textarea>
+      <div style="margin-top:10px"><button id="sSave">Save folders</button> <button class="build" id="dry" style="margin-left:6px">Dry run</button><span class="status" id="dSt"></span></div></div>
+      <h3>Latest dry run</h3>${planHtml}
+    </div></div>`;
+  document.querySelectorAll("[data-open]").forEach(a => a.onclick = () => openProject(a.dataset.open));
+  document.getElementById("sBtn").onclick = async () => {
+    const q = document.getElementById("sq").value; const r = await fetch("/api/search?q=" + encodeURIComponent(q)).then(r => r.json());
+    document.getElementById("sRes").innerHTML = r.hits.map(h => `<div class="run" style="padding:8px"><b>${esc(h.brain)} / ${esc(h.page)}</b> <span class="muted">${esc(h.category)}</span><div style="font-size:12px">${esc(h.text)}</div></div>`).join("") || '<p class="hint">No matches.</p>';
+  };
+  const lines = id => document.getElementById(id).value.split("\n").map(x => x.trim()).filter(Boolean);
+  document.getElementById("sSave").onclick = async () => {
+    await fetch("/api/pcbrain/settings", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scan_folders: lines("scan"), skip_folders: lines("skip") }) });
+    document.getElementById("dSt").textContent = "Saved.";
+  };
+  document.getElementById("dry").onclick = async () => {
+    await fetch("/api/pcbrain/dryrun", { method: "POST" }); pollDry();
+  };
+  if (d.sorting) pollDry();
+}
+
+async function pollDry() {
+  const d = await fetch("/api/pcbrain").then(r => r.json());
+  const st = document.getElementById("dSt"); if (!st) return;
+  if (d.sorting) { st.className = "status building"; st.textContent = d.sorting[d.sorting.length - 1] || "Scanning…"; setTimeout(pollDry, 1500); }
+  else renderPC();
+}
+
 state.filesPath = "";
 
 async function renderFiles(body) {
   const d = await fetch(`/api/project/${encodeURIComponent(state.project)}/files?path=${encodeURIComponent(state.filesPath)}`).then(r => r.json());
-  if (d.error) { state.filesPath = ""; body.innerHTML = `<div class="body"><div class="panel"><div class="placeholder">${esc(d.error)}</div></div></div>`; return; }
+  if (d.error) { async function renderOverview(body) {
+  const d = await fetch(`/api/project/${encodeURIComponent(state.project)}/sessions`).then(r => r.json());
+  const list = d.sessions.map(x => `<div class="sess"><div class="q">${esc(x.question)}</div>
+    <div class="a">${esc(x.answer)}</div><div class="m">${esc(x.time)} · ${esc(x.ai)} · ${x.seconds}s${x.ok ? "" : " · failed"}</div></div>`).join("");
+  body.innerHTML = `<div class="body"><div class="panel" style="max-width:900px">
+    <h3>Ask this brain</h3><p class="hint">${esc(state.settings.description)} Answers come from the wiki with sources. Read-only: asking never changes anything.</p>
+    <div class="ask"><textarea id="q" placeholder="Ask a question…"></textarea><button class="build" id="askBtn" style="margin:0">Ask</button></div>
+    <div class="status" id="askSt" style="margin:-8px 0 12px"></div>
+    <h3>Sessions</h3><p class="hint">Every question is kept. Build Brain learns from them on its next run.</p>
+    ${list || '<div class="placeholder">No questions yet.</div>'}</div></div>`;
+  document.getElementById("askBtn").onclick = async () => {
+    const q = document.getElementById("q").value.trim(); if (!q) return;
+    const st = document.getElementById("askSt"); st.className = "status building"; st.textContent = "Thinking… (this can take a minute or two)";
+    const r = await fetch(`/api/project/${encodeURIComponent(state.project)}/ask`, { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: q }) }).then(r => r.json());
+    if (r.error) { st.className = "status"; st.textContent = r.error; return; }
+    render(); loadSessNav();
+  };
+  loadSessNav();
+}
+
+async function loadSessNav() {
+  if (!state.project) return;
+  const d = await fetch(`/api/project/${encodeURIComponent(state.project)}/sessions`).then(r => r.json());
+  document.getElementById("sessNav").innerHTML = d.sessions.slice(0, 12).map(x =>
+    `<a class="nav" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" data-sess>${esc(x.question)}</a>`).join("")
+    || '<div class="nav muted">None yet</div>';
+  document.querySelectorAll("[data-sess]").forEach(a => a.onclick = () => { state.tab = "Overview"; render(); });
+}
+
+async function renderPC() {
+  state.view = "pc";
+  document.querySelectorAll("[data-p]").forEach(a => a.classList.remove("on"));
+  document.getElementById("pcNav").classList.add("on");
+  const d = await fetch("/api/pcbrain").then(r => r.json());
+  const rows = d.brains.map(b => `<tr><td><a class="nav" style="display:inline;padding:0" data-open="${esc(b.name)}">${esc(b.name)}</a><div class="muted" style="font-size:11px">${esc(b.description)}</div></td>
+    <td>${b.pages}</td><td>${b.pending}</td><td>${b.sessions}</td><td>${esc(b.ai || "chatgpt")}</td></tr>`).join("");
+  const plan = d.plans[0];
+  const planHtml = plan ? `<div class="run"><b>Dry run ${esc(plan.id)}</b> <span class="muted">· ${plan.scanned} files scanned · ${plan.suggestions} suggestions ${esc(JSON.stringify(plan.by_reason))}</span>
+      <ul>${plan.items.slice(0, 60).map(i => `<li>${esc(i.reason)}: ${esc(i.file)}${i.keep ? ` <span class="muted">(keep ${esc(i.keep)})</span>` : ""}</li>`).join("") || "<li>No suggestions.</li>"}</ul>
+      ${plan.items.length > 60 ? `<p class="hint">Showing 60. Full list in PC-Brain\\sorter-plans\\${esc(plan.id)}.csv</p>` : ""}
+      ${plan.errors.length ? `<p class="hint">${plan.errors.length} problems (e.g. ${esc(plan.errors[0])})</p>` : ""}</div>` : '<div class="placeholder">No dry run yet.</div>';
+  document.getElementById("main").innerHTML = `
+    <div class="crumb">PC Brain</div>
+    <div class="title"><div class="dot">PC</div>PC Brain</div>
+    <div class="tabs"><div class="tab on">Overview</div></div>
+    <div class="body"><div class="panel" style="max-width:1000px">
+      <h3>All brains</h3><p class="hint">The PC Brain oversees every project brain.</p>
+      <table class="pc"><tr><th>Brain</th><th>Pages</th><th>Pending</th><th>Sessions</th><th>AI</th></tr>${rows || '<tr><td colspan="5" class="muted">No brains yet.</td></tr>'}</table>
+      <h3>Search every brain</h3><p class="hint">Plain text search across all wiki pages.</p>
+      <div class="ask"><input type="text" id="sq" placeholder="Search…"><button id="sBtn">Search</button></div><div id="sRes"></div>
+      <h3 style="margin-top:22px">PC sorter (dry run only)</h3>
+      <p class="hint">Scans the folders below and SUGGESTS duplicates, empty and junk files for the "FOR REVIEW – TO DELETE" folder. It never moves, renames or deletes anything.</p>
+      <div class="section"><p class="hint">Folders to scan (one per line)</p><textarea id="scan">${esc(d.sorter.scan_folders.join("\n"))}</textarea>
+      <p class="hint" style="margin-top:8px">Folders to skip (one per line)</p><textarea id="skip">${esc(d.sorter.skip_folders.join("\n"))}</textarea>
+      <div style="margin-top:10px"><button id="sSave">Save folders</button> <button class="build" id="dry" style="margin-left:6px">Dry run</button><span class="status" id="dSt"></span></div></div>
+      <h3>Latest dry run</h3>${planHtml}
+    </div></div>`;
+  document.querySelectorAll("[data-open]").forEach(a => a.onclick = () => openProject(a.dataset.open));
+  document.getElementById("sBtn").onclick = async () => {
+    const q = document.getElementById("sq").value; const r = await fetch("/api/search?q=" + encodeURIComponent(q)).then(r => r.json());
+    document.getElementById("sRes").innerHTML = r.hits.map(h => `<div class="run" style="padding:8px"><b>${esc(h.brain)} / ${esc(h.page)}</b> <span class="muted">${esc(h.category)}</span><div style="font-size:12px">${esc(h.text)}</div></div>`).join("") || '<p class="hint">No matches.</p>';
+  };
+  const lines = id => document.getElementById(id).value.split("\n").map(x => x.trim()).filter(Boolean);
+  document.getElementById("sSave").onclick = async () => {
+    await fetch("/api/pcbrain/settings", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scan_folders: lines("scan"), skip_folders: lines("skip") }) });
+    document.getElementById("dSt").textContent = "Saved.";
+  };
+  document.getElementById("dry").onclick = async () => {
+    await fetch("/api/pcbrain/dryrun", { method: "POST" }); pollDry();
+  };
+  if (d.sorting) pollDry();
+}
+
+async function pollDry() {
+  const d = await fetch("/api/pcbrain").then(r => r.json());
+  const st = document.getElementById("dSt"); if (!st) return;
+  if (d.sorting) { st.className = "status building"; st.textContent = d.sorting[d.sorting.length - 1] || "Scanning…"; setTimeout(pollDry, 1500); }
+  else renderPC();
+}
+
+state.filesPath = ""; body.innerHTML = `<div class="body"><div class="panel"><div class="placeholder">${esc(d.error)}</div></div></div>`; return; }
   const size = n => n < 1024 ? n + " B" : n < 1048576 ? (n / 1024).toFixed(0) + " KB" : (n / 1048576).toFixed(1) + " MB";
   const date = t => new Date(t * 1000).toLocaleDateString();
   const rows = d.entries.map(e => `<tr class="${e.dir ? "dir" : ""}" ${e.dir && e.exists !== false ? `data-go="${esc(e.path)}"` : ""}>
