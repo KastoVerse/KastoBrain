@@ -64,10 +64,27 @@ Double-click **`H:\KastoBrain\setup.bat`**.
 It first shows a **dry run** list of the folders it will create (inside `H:\KastoBrain` only),
 then waits. Press a key to create them, or close the window to cancel.
 
-### 3. Start the app
+### 3. Create the KastoBrain icon
 
-Double-click **`H:\KastoBrain\start-kastobrain.bat`**.
-Your browser opens **http://127.0.0.1:8765**. Keep the black window open while you use it; close it to stop.
+Right-click **`H:\KastoBrain\make-shortcuts.ps1`** → **Run with PowerShell** (or paste
+`powershell -ExecutionPolicy Bypass -File H:\KastoBrain\make-shortcuts.ps1`).
+It asks first, then puts a **KastoBrain** icon on your Desktop and in the Start menu.
+
+**Click the icon.** KastoBrain opens in its own window like any other program:
+- no black window; the engine runs hidden,
+- click the icon again and it just reopens,
+- close the window and KastoBrain stops by itself about 3 minutes later.
+
+(`start-kastobrain.bat` still works too, if you ever want to see the engine's messages.
+Engine messages are also kept in `Logs\engine.log`, plus one previous log.)
+
+### Updates
+
+When KastoBrain opens, it checks your GitHub for a newer version (free, no AI).
+If there is one, a banner shows what's new with **Update now**. Nothing updates until you press it.
+Only the program is replaced; your brains, wiki, sessions and settings are never touched,
+and the previous version is recorded so it can be rolled back.
+New versions only exist when you approve (merge) a change on GitHub.
 
 ### 4. Make your first brain
 
